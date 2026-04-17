@@ -1,0 +1,34 @@
+# Mobile QA Workflow — 问题工作区默认配置
+# 每个 Issue 在 qa-workspace/{issue_id}/ 下创建一份副本
+
+# 基本信息（Phase 1 填写）
+issue_id: null
+workspace_name: null
+platform: null
+priority: null
+
+# 产物路径（自动填充）
+output_issue_card: null
+output_spec: null
+output_context_bundle: null
+output_rca_report: null
+output_fix_design: null
+output_impl_report: null
+output_verification_report: null
+output_knowledge_card: null
+
+# 环境能力检测（workflow 初始化时填写）
+env_file_system: true
+env_git: true
+env_lint_tools: true
+env_subagent: true
+
+# Git 分支信息（Phase 5 填写）
+fix_branch: null
+
+# 研发侧上下文（Phase 1 选填，与 issue-card「代码与文档上下文」一致）
+repo_path: null
+repo_branch: null
+code_patch: null
+prd_link: null
+tech_design_link: null

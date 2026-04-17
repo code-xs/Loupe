@@ -1,0 +1,76 @@
+        <task id="mobile-qa/functionality-deep-dive/workflow.xml" name="Functionality Deep-Dive Workflow Orchestrator">
+            <llm critical="true">
+                <mandate>务必严格按照阶段顺序执行 F1 到 F5</mandate>
+                <mandate>所有产物必须写入子工作区，并保持可被主工作流回注</mandate>
+                <mandate>若置信度不足或多 Agent 对抗不收敛，必须进入 Human-Review 或返回不确定性说明</mandate>
+            </llm>
+
+            <io-contract desc="专项子工作流 I/O 契约">
+                <phase name="f1-context-reconstruction" input="issue-card.md, spec.md, context-bundle.md" output="environment-factor-report.md"/>
+                <phase name="f2-state-topology" input="spec.md, context-bundle.md, environment-factor-report.md(optional)" output="deep-dive-topology.md"/>
+                <phase name="f3-temporal-correlation" input="deep-dive-topology.md, context-bundle.md" output="concurrency-analysis-report.md"/>
+                <phase name="f4-isolation-debate" input="environment-factor-report.md(optional), deep-dive-topology.md, concurrency-analysis-report.md" output="functionality-deep-dive-rca.md, deep-dive-summary.md"/>
+                <phase name="f5-defensive-fix-design" input="functionality-deep-dive-rca.md, deep-dive-topology.md, concurrency-analysis-report.md" output="defensive-fix-design.md(conditional)"/>
+            </io-contract>
+
+            <flow>
+                <step n="1" goal="加载流程规范">
+                    <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范，并严格遵守"/>
+                </step>
+
+                <step n="2" goal="初始化或恢复子工作区状态">
+                    <action>读取 {workflow_status}，获取 stepsCompleted、current_state、artifacts</action>
+                    <check if="{workflow_status} 文件不存在">
+                        <load target="mobile-qa-workflow/functionality-deep-dive/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
+                    </check>
+                    <action>根据 stepsCompleted 和 <load target="mobile-qa-workflow/functionality-deep-dive/core/workflow-model.yaml" prompt="加载阶段序列"/> 判断当前应执行的阶段</action>
+                </step>
+
+                <step n="3" goal="执行当前阶段">
+                    <switch condition="{current_phase}">
+                        <case if="f1-context-reconstruction">
+                            <load target="mobile-qa-workflow/functionality-deep-dive/phases/f1-context-reconstruction.md" prompt="加载并执行，传递 workspace_folder、config_source、issue_card、spec_file、context_bundle"/>
+                        </case>
+                        <case if="f2-state-topology">
+                            <load target="mobile-qa-workflow/functionality-deep-dive/phases/f2-state-topology.md" prompt="加载并执行，传递 workspace_folder、config_source、spec_file、context_bundle、environment_factor_report"/>
+                        </case>
+                        <case if="f3-temporal-correlation">
+                            <load target="mobile-qa-workflow/functionality-deep-dive/phases/f3-temporal-correlation.md" prompt="加载并执行，传递 workspace_folder、config_source、context_bundle、topology_report"/>
+                        </case>
+                        <case if="f4-isolation-debate">
+                            <load target="mobile-qa-workflow/functionality-deep-dive/phases/f4-isolation-debate.md" prompt="加载并执行，传递 workspace_folder、config_source、environment_factor_report、topology_report、concurrency_report"/>
+                        </case>
+                        <case if="f5-defensive-fix-design">
+                            <load target="mobile-qa-workflow/functionality-deep-dive/phases/f5-defensive-fix-design.md" prompt="加载并执行，传递 workspace_folder、config_source、deep_dive_rca、topology_report、concurrency_report"/>
+                        </case>
+                    </switch>
+                </step>
+
+                <step n="4" goal="阶段完成后更新状态与路由">
+                    <action>将 {current_phase} 加入 stepsCompleted</action>
+                    <action>更新 lastStep、last_updated 和 current_stage</action>
+                    <switch condition="{current_state}">
+                        <case if="DD-LowConfidence">
+                            <step-pause title="专项 RCA 置信度不足，请补充上下文或转人工。">
+                                <option title="[R] Retry：补充上下文后重试
+" action="回主工作流补充上下文后重试"/>
+                                <option title="[H] Human：转人工处理
+" action="进入 Human-Review"/>
+                            </step-pause>
+                        </case>
+                        <case if="DD-Human-Review">
+                            <step-pause title="专项子工作流需要人工介入，请处理后告知继续方向。">
+                                <option title="[C] Continue：人工处理完成，继续工作流
+" action="根据人工指令恢复"/>
+                            </step-pause>
+                        </case>
+                        <case if="DD-Completed">
+                            <action>确认 deep-dive-summary.md 已生成，可回注主工作流</action>
+                        </case>
+                        <default>
+                            <goto step="2"/>
+                        </default>
+                    </switch>
+                </step>
+            </flow>
+        </task>

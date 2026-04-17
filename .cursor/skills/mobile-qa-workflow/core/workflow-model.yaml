@@ -1,0 +1,10 @@
+# Mobile QA B2C Workflow — 阶段序列定义
+# 编排器根据 workflow-status.yaml 中的 stepsCompleted 判断当前应执行的阶段
+
+workflow_step:
+- 1. qa-intake：mobile-qa-workflow/phases/p1-intake.md
+- 2. qa-spec-definition：mobile-qa-workflow/phases/p2-spec-definition.md
+- 3. qa-root-cause：mobile-qa-workflow/phases/p3-root-cause.md
+- 4. qa-fix-design：mobile-qa-workflow/phases/p4-fix-design.md
+- 5. qa-fix-impl：mobile-qa-workflow/phases/p5-fix-impl.md
+- 6. qa-verification：mobile-qa-workflow/phases/p6-verification.md

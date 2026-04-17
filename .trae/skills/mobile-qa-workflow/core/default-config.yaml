@@ -17,6 +17,14 @@ output_impl_report: null
 output_verification_report: null
 output_knowledge_card: null
 
+# 专项子工作流产物路径（Deep-Dive 自动填充）
+output_environment_factor_report: null
+output_topology_report: null
+output_concurrency_report: null
+output_deep_dive_rca: null
+output_deep_dive_summary: null
+output_defensive_fix_design: null
+
 # 环境能力检测（workflow 初始化时填写）
 env_file_system: true
 env_git: true

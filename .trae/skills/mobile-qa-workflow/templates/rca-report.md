@@ -6,6 +6,7 @@
 ### 基本信息
 - **关联 Issue**: [Issue Card ID]
 - **分析路径**: 快速路径 / 深度路径（N 个视角）
+- **专项子工作流**: [未触发 / 已触发-功能疑难专项 / 已触发-UI专项(future)]
 - **分析耗时**: [时间]
 
 ### 根因结论
@@ -62,6 +63,35 @@
 - **Android 根因**: [摘要]
 - **iOS 根因**: [摘要]
 - **跨端一致性**: [根因相同 / 根因不同但表现相似 / 完全独立]
+
+### 功能疑难专项分析附录（触发 Deep-Dive 时填写）
+
+> 以下内容由功能疑难专项子工作流生成，回注到主 RCA 报告。
+
+#### 回注策略
+- **合并方式**: [收敛增强 / 互补替换 / 冲突覆盖]
+- **置信度调整**: [调整前] → [调整后]，原因: [...]
+
+#### 环境因子摘要
+- [从 environment-factor-report.md 回注的关键发现]
+
+#### 状态拓扑关键发现
+- [从 deep-dive-topology.md 回注的孤岛状态、非法跳转等]
+
+#### 竞态窗口关键发现
+- [从 concurrency-analysis-report.md 回注的高风险竞态窗口]
+
+#### 专项 RCA 结论
+- **专项主根因**: [与主 RCA 一致/不同]
+- **专项贡献因子**: [...]
+- **专项置信度**: [0.XX]
+
+#### 完整专项报告引用
+- 环境因子报告: [{workspace_folder}/deep-dive/environment-factor-report.md]
+- 状态拓扑报告: [{workspace_folder}/deep-dive/deep-dive-topology.md]
+- 并发分析报告: [{workspace_folder}/deep-dive/concurrency-analysis-report.md]
+- 专项 RCA 报告: [{workspace_folder}/deep-dive/functionality-deep-dive-rca.md]
+- 专项摘要: [{workspace_folder}/deep-dive/deep-dive-summary.md]
 
 ### 影响评估
 - **影响范围**: [功能/用户量/版本]

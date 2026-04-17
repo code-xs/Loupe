@@ -80,7 +80,8 @@
                     <rule>强制启动：遇到此标签时必须立即启动一个新的 SubAgent，严禁主 Agent 在调用处进行任何预处理</rule>
                     <rule>角色注入：启动后的 SubAgent prompt 必须强制包含：
                         1. 加载 core-rules.xml：&lt;load target="mobile-qa-workflow/core/core-rules.xml" prompt="加载并执行"/&gt;
-                        2. 加载角色定义：&lt;load target="mobile-qa-workflow/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;
+                        2. 加载角色定义：&lt;load target="mobile-qa-workflow/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;（主工作流 Agent）
+                           或 &lt;load target="mobile-qa-workflow/functionality-deep-dive/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;（专项子工作流 Agent）
                         3. 注入 config_source 路径</rule>
                     <rule>隔离透传：主 Agent 必须将 subagent_prompt 视为不透明黑盒字符串原样透传，严禁提前解析其中的 load 等标签</rule>
                     <rule>嵌套禁止：SubAgent 中严禁启动新的 SubAgent，必须先返回结果由主 Agent 协调</rule>
@@ -90,11 +91,21 @@
                     <param name="subagent_prompt">传递给子 Agent 的提示词内容，作为黑盒字符串透传</param>
                 </params>
                 <available-agents>
-                    <agent name="curator" scenario="策展">上下文净化、存活性校验、配置掩码</agent>
-                    <agent name="investigator" scenario="归因">执行 OVHSC 推理链，输出根因假设和因果链</agent>
-                    <agent name="challenger" scenario="归因+修复">对结论执行五维质疑（归因）或四重攻击（修复）</agent>
-                    <agent name="arbiter" scenario="归因+修复">汇总仲裁 + 置信度校准 / 评估矩阵裁定</agent>
-                    <agent name="fix-proposer" scenario="修复">独立设计修复方案并执行四重论证</agent>
+                    <agent-group name="main-workflow" desc="主工作流 Agent（mobile-qa-workflow/agents/）">
+                        <agent name="curator" scenario="策展">上下文净化、存活性校验、配置掩码</agent>
+                        <agent name="investigator" scenario="归因">执行 OVHSC 推理链，输出根因假设和因果链</agent>
+                        <agent name="challenger" scenario="归因+修复">对结论执行五维质疑（归因）或四重攻击（修复）</agent>
+                        <agent name="arbiter" scenario="归因+修复">汇总仲裁 + 置信度校准 / 评估矩阵裁定</agent>
+                        <agent name="fix-proposer" scenario="修复">独立设计修复方案并执行四重论证</agent>
+                    </agent-group>
+                    <agent-group name="functionality-deep-dive" desc="功能疑难专项 Agent（mobile-qa-workflow/functionality-deep-dive/agents/）">
+                        <agent name="context-reconstructor" scenario="环境重构">重建隐蔽环境因子，输出环境关联结论</agent>
+                        <agent name="state-analyst" scenario="状态分析">逆向状态机、数据流追踪与不可变性审查</agent>
+                        <agent name="temporal-analyst" scenario="时序分析">对齐多维时间轴、识别竞态窗口与复现路径</agent>
+                        <agent name="challenger" scenario="专项质疑">七维质疑（含状态机、生命周期、缓存、并发）</agent>
+                        <agent name="arbiter" scenario="专项仲裁">汇总专项分析、收敛主根因与贡献因子</agent>
+                        <agent name="defensive-fix-architect" scenario="防御性修复">状态机加固、竞态收敛和适度性修复设计</agent>
+                    </agent-group>
                 </available-agents>
                 <example><![CDATA[<invoke-subagent subagent_type="investigator" subagent_prompt="
                     <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
@@ -153,6 +164,7 @@
         <trigger n="4">Spec 存在多种解读且影响修复方向</trigger>
         <trigger n="5">静态微验证超过 3 轮仍失败</trigger>
         <trigger n="6">Non-Bug 回流超过 2 次</trigger>
+        <trigger n="7">功能疑难专项子工作流置信度 &lt; 0.5 且无法进一步收敛</trigger>
         <output-format>
 ⚠️ [Human-Review Required]
 Issue: {issue_id}

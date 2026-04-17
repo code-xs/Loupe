@@ -9,8 +9,8 @@
     <io-contract desc="各阶段产物 I/O 契约">
         <phase name="qa-intake" input="用户描述；可选 intake_document_url（见 p1-intake）" output="issue-card.md"/>
         <phase name="qa-spec-definition" input="issue-card.md" output="spec.md, context-curation-report.md, context-bundle.md"/>
-        <phase name="qa-root-cause" input="issue-card.md, spec.md, context-bundle.md" output="rca-report.md"/>
-        <phase name="qa-fix-design" input="issue-card.md, spec.md, rca-report.md" output="fix-design.md"/>
+        <phase name="qa-root-cause" input="issue-card.md, spec.md, context-bundle.md" output="rca-report.md; 可选: deep-dive-summary.md, functionality-deep-dive-rca.md"/>
+        <phase name="qa-fix-design" input="issue-card.md, spec.md, rca-report.md; 可选: deep-dive-summary.md" output="fix-design.md"/>
         <phase name="qa-fix-impl" input="fix-design.md, spec.md" output="impl-report.md"/>
         <phase name="qa-verification" input="spec.md, fix-design.md, impl-report.md" output="verification-report.md, knowledge-card.md"/>
     </io-contract>

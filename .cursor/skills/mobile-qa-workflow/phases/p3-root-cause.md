@@ -205,7 +205,67 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
         </check>
     </step>
 
-    <step n="6" goal="客户端-服务端边界判定（功能类/网络类）">
+    <step n="6" goal="专项子工作流路由决策 (Deep-Dive Routing)">
+        <action>【专项路由评估】在深度路径 RCA 完成后（或快速路径升级深度路径后），评估是否需要触发功能疑难专项子工作流：
+
+            【触发条件】满足以下 **任一** 即触发：
+            1. 主分类 == 功能类 且 complexity_level == complex
+            2. 深度路径 Arbiter 裁定中 convergence_factor &lt; 0.6（分析视角未收敛）
+            3. 根因涉及状态机缺陷、生命周期竞态、缓存一致性中的 2 项及以上
+            4. Challenger 质疑中存在 Critical 级别的"状态机一致性"或"并发时序漏洞"质疑未被消解
+
+            【不触发条件】
+            - analysis_path == fast 且反事实校验通过 → 直接跳到 step 7
+            - 最终置信度 >= 0.8 且无 Critical 质疑残留 → 直接跳到 step 7
+            - 非功能类问题（稳定性/性能/UI/网络/兼容性）→ 暂不触发（未来扩展 ui-deep-dive 等）
+        </action>
+
+        <check if="满足专项路由触发条件">
+            <action>【启动功能疑难专项子工作流】
+                1. 创建子工作区：{workspace_folder}/deep-dive/
+                2. 更新 {workflow_status}：
+                   - specialized_workflow.mode = functionality-deep-dive
+                   - specialized_workflow.status = DD-InProgress
+                   - specialized_workflow.sub_workspace = {workspace_folder}/deep-dive/
+                3. 将当前 RCA 中间结论（假设列表、证据映射、Challenger 质疑）写入子工作区作为输入上下文
+            </action>
+            <load target="mobile-qa-workflow/functionality-deep-dive/core/workflow.xml" prompt="加载并执行功能疑难专项子工作流，传递参数：
+                - config_source: {config_source}
+                - workspace_folder: {workspace_folder}/deep-dive
+                - issue_card: {issue_card}
+                - spec_file: {spec_file}
+                - context_bundle: {context_bundle}
+                - workflow_status: {workspace_folder}/deep-dive/workflow-status.yaml"/>
+        </check>
+
+        <check if="不满足专项路由触发条件">
+            <action>跳过专项子工作流，直接进入标准 RCA 输出</action>
+        </check>
+    </step>
+
+    <step n="7" goal="回注专项结论（如有）并合并最终 RCA">
+        <check if="specialized_workflow.status == DD-Completed">
+            <action>【回注专项结论到主 RCA】
+                1. 读取 {workspace_folder}/deep-dive/deep-dive-summary.md
+                2. 读取 {workspace_folder}/deep-dive/functionality-deep-dive-rca.md
+                3. 将专项结论合并到主 RCA：
+                   - 若专项根因与主路径根因一致 → 提升置信度（convergence_factor += 0.1，上限 1.0）
+                   - 若专项根因不同但互补 → 主根因取专项结论，原结论降为 Contributing Factor
+                   - 若专项根因与主路径冲突 → 采信专项结论（专项分析更深入），标注冲突说明
+                4. 更新 {workflow_status}：specialized_workflow.status = Merged
+            </action>
+        </check>
+
+        <check if="specialized_workflow.status == DD-LowConfidence">
+            <action>专项分析亦未收敛，保留主 RCA 结论，但在报告中附注专项分析的部分发现：
+                1. 读取 {workspace_folder}/deep-dive/deep-dive-summary.md
+                2. 将有价值的部分发现（环境因子、状态拓扑、竞态窗口）附加到 RCA 报告附录
+                3. 置信度不变或下调
+            </action>
+        </check>
+    </step>
+
+    <step n="8" goal="客户端-服务端边界判定（功能类/网络类）">
         <check if="主分类 == 功能 或 网络">
             <action>边界判定三步法：
                 1. 抓包/日志确认实际请求和响应内容
@@ -215,7 +275,7 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
         </check>
     </step>
 
-    <step n="7" goal="跨平台 Sub-Issue 判定">
+    <step n="9" goal="跨平台 Sub-Issue 判定">
         <check if="platform == Both 且根因指向平台特异性代码">
             <check if="{env_subagent} == true">
                 <invoke-subagent subagent_type="investigator" subagent_prompt="
@@ -230,7 +290,7 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
         </check>
     </step>
 
-    <step n="8" goal="输出 Root Cause Report">
+    <step n="10" goal="输出 Root Cause Report">
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
         <action>更新 {config_source}：output_rca_report = {output_file}</action>
         <check if="最终置信度 >= 0.5">

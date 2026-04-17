@@ -1,0 +1,81 @@
+# Eval Framework 默认配置
+# 控制评估运行的全局参数
+
+runner_config:
+  loupe_model: claude-sonnet-4-20250514
+  baseline_model: claude-sonnet-4-20250514
+  judge_model: claude-opus-4-20250514
+  temperature: 0.1
+  max_retries: 2
+  timeout_per_phase: 300       # 单阶段超时（秒）
+  timeout_per_case: 1800       # 单 Case 超时（秒）
+  parallel_sessions: 1         # V1 串行模式
+
+parallel_config:
+  max_sessions: 4
+  session_memory_limit: "2GB"
+  chain_parallel: true
+  case_parallel: true
+  scheduling_strategy: "chain_first"  # chain_first | case_first | round_robin
+
+execution_profiles:
+  pr_quick:
+    cases: "eval-cases/seed-10/"
+    chains: ["A", "B"]
+    runs_per_case: 1
+    description: "PR 快速评估：10 种子 Case × Chain A+B"
+  nightly:
+    cases: "eval-cases/"
+    chains: ["A", "B", "D"]
+    runs_per_case: 1
+    description: "夜间全量评估：全部 Case × Chain A+B+D"
+  weekly:
+    cases: "eval-cases/"
+    chains: ["A", "B", "D"]
+    runs_per_case: 3
+    description: "周评估：全部 Case × Chain A+B+D × 3 次取均值"
+  monthly:
+    cases: "eval-cases/"
+    chains: ["A", "B", "C", "D"]
+    runs_per_case: 1
+    description: "月度全链路评估：含 Chain C 外部 B2C 结果"
+
+chain_definitions:
+  A:
+    name: "主流程（标准 RCA）"
+    executor: "ide_session"
+    skill: "mobile-qa-workflow"
+    mode: "standard"
+    description: "使用 Loupe 标准工作流执行 RCA"
+  B:
+    name: "专家模式（Functionality Deep-Dive）"
+    executor: "ide_session"
+    skill: "mobile-qa-workflow"
+    mode: "expert"
+    description: "强制触发 Functionality Deep-Dive 子工作流"
+  C:
+    name: "外部 B2C 方案"
+    executor: "manual_input"
+    description: "人工录入外部工具（如 ChatGPT/Gemini）结果"
+  D:
+    name: "LLM 裸跑基线"
+    executor: "baseline_runner"
+    model: "claude-sonnet-4-20250514"
+    description: "不使用任何工作流编排，LLM 单次分析"
+
+# 结果输出配置
+output_config:
+  results_dir: "eval-results/"
+  baseline_dir: "eval-results/baseline-latest/"
+  state_file: "eval-results/eval-state.json"
+  log_level: "INFO"
+  save_session_logs: true
+
+# IDE 会话配置
+ide_config:
+  adapter: "trae"              # trae | cursor | extension_api
+  headless: true
+  skill_path: "mobile-qa-workflow"
+  auto_reply_config: "eval-framework/auto-reply-rules.yaml"
+  graceful_shutdown_timeout: 10  # 秒
+  health_check_interval: 30      # 秒

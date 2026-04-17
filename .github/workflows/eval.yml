@@ -1,0 +1,297 @@
+name: Loupe Eval
+
+on:
+  pull_request:
+    paths:
+      - 'mobile-qa-workflow/**'
+      - 'eval-framework/**'
+      - 'eval-cases/**'
+
+  schedule:
+    # Nightly full eval at 02:00 UTC (10:00 CST)
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:
+    inputs:
+      eval_profile:
+        description: 'Evaluation profile to run'
+        required: true
+        default: 'pr_quick'
+        type: choice
+        options:
+          - pr_quick
+          - nightly_full
+          - weekly
+          - monthly
+
+env:
+  PYTHON_VERSION: '3.11'
+  EVAL_RESULTS_DIR: 'eval-results'
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  EVAL_WEBHOOK_URL: ${{ secrets.EVAL_WEBHOOK_URL }}
+
+jobs:
+  # ============================================================
+  # Job 1: PR Quick Eval (triggered on PR)
+  # ============================================================
+  quick-eval:
+    if: github.event_name == 'pull_request'
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r eval-framework/requirements.txt 2>/dev/null || true
+          pip install anthropic pyyaml
+
+      - name: Run Quick Eval (10 seed cases, Chain A+B)
+        run: |
+          python eval-framework/coordinator.py run \
+            --config eval-framework/configs/pr-quick.yaml \
+            --cases eval-cases/seed-10/ \
+            --chains A,B \
+            --parallel 4
+
+      - name: Run Scoring
+        run: |
+          python eval-framework/judge.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/ \
+            --rubric eval-framework/scoring-rubric-base.yaml
+
+      - name: Compare with Baseline
+        run: |
+          python eval-framework/comparator.py \
+            --current ${{ env.EVAL_RESULTS_DIR }}/ \
+            --baseline ${{ env.EVAL_RESULTS_DIR }}/baseline-latest/ \
+            --output ${{ env.EVAL_RESULTS_DIR }}/pr-comparison.md
+
+      - name: Post PR Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = '${{ env.EVAL_RESULTS_DIR }}/pr-comparison.md';
+            let report = '## Loupe Eval Results\n\n⚠️ Comparison report not generated.';
+            if (fs.existsSync(reportPath)) {
+              report = fs.readFileSync(reportPath, 'utf8');
+            }
+            // Truncate if too long for GitHub comment
+            if (report.length > 65000) {
+              report = report.substring(0, 64000) + '\n\n... (truncated)';
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Quality Gate
+        run: |
+          python eval-framework/quality_gate.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/ \
+            --min-score 0.75 \
+            --max-regression 0.05
+
+      - name: Upload Eval Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-pr-${{ github.event.pull_request.number }}
+          path: ${{ env.EVAL_RESULTS_DIR }}/
+          retention-days: 30
+
+  # ============================================================
+  # Job 2: Nightly Full Eval (triggered on schedule)
+  # ============================================================
+  nightly-eval:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.eval_profile == 'nightly_full')
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 240
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r eval-framework/requirements.txt 2>/dev/null || true
+          pip install anthropic pyyaml
+
+      - name: Run Full Eval (all cases, Chain A+B+D)
+        run: |
+          python eval-framework/coordinator.py run \
+            --config eval-framework/configs/nightly-full.yaml \
+            --cases eval-cases/ \
+            --chains A,B,D \
+            --parallel 4
+
+      - name: Run Scoring with Stage-Level Breakdown
+        run: |
+          python eval-framework/judge.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/ \
+            --rubric eval-framework/scoring-rubric-base.yaml \
+            --stage-scoring
+
+      - name: Generate Full Report
+        run: |
+          python eval-framework/comparator.py \
+            --current ${{ env.EVAL_RESULTS_DIR }}/ \
+            --baseline ${{ env.EVAL_RESULTS_DIR }}/baseline-latest/ \
+            --output ${{ env.EVAL_RESULTS_DIR }}/nightly-report.md \
+            --full-report
+
+      - name: Weakness Detection
+        run: |
+          python eval-framework/weakness_detector.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/ \
+            --threshold 7.0 \
+            --output ${{ env.EVAL_RESULTS_DIR }}/weakness-report.json
+
+      - name: Quality Gate
+        run: |
+          python eval-framework/quality_gate.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/ \
+            --min-score 0.75 \
+            --max-regression 0.05
+
+      - name: Update Baseline (on pass)
+        if: success()
+        run: |
+          cp -r ${{ env.EVAL_RESULTS_DIR }}/scoring/ ${{ env.EVAL_RESULTS_DIR }}/baseline-latest/ 2>/dev/null || true
+
+      - name: Upload Eval Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-nightly-${{ github.run_number }}
+          path: ${{ env.EVAL_RESULTS_DIR }}/
+          retention-days: 90
+
+  # ============================================================
+  # Job 3: Weekly Deep Eval (manual trigger)
+  # ============================================================
+  weekly-eval:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.eval_profile == 'weekly'
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 840
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r eval-framework/requirements.txt 2>/dev/null || true
+          pip install anthropic pyyaml
+
+      - name: Run Weekly Eval (all cases, 3 runs, Chain A+B+D)
+        run: |
+          for i in 1 2 3; do
+            echo "=== Run $i of 3 ==="
+            python eval-framework/coordinator.py run \
+              --config eval-framework/configs/eval-config.yaml \
+              --cases eval-cases/ \
+              --chains A,B,D \
+              --parallel 4 \
+              --run-id "weekly-run-$i"
+          done
+
+      - name: Aggregate Scores (3-run average)
+        run: |
+          python eval-framework/scoring_engine.py \
+            --aggregate \
+            --runs ${{ env.EVAL_RESULTS_DIR }}/weekly-run-1 \
+                   ${{ env.EVAL_RESULTS_DIR }}/weekly-run-2 \
+                   ${{ env.EVAL_RESULTS_DIR }}/weekly-run-3 \
+            --output ${{ env.EVAL_RESULTS_DIR }}/weekly-averaged.json
+
+      - name: Generate Weekly Report
+        run: |
+          python eval-framework/report_generator.py \
+            --results ${{ env.EVAL_RESULTS_DIR }}/weekly-averaged.json \
+            --format full \
+            --output ${{ env.EVAL_RESULTS_DIR }}/weekly-report.md
+
+      - name: Upload Eval Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-weekly-${{ github.run_number }}
+          path: ${{ env.EVAL_RESULTS_DIR }}/
+          retention-days: 180
+
+  # ============================================================
+  # Job 4: Monthly Comprehensive Eval (manual trigger)
+  # ============================================================
+  monthly-eval:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.eval_profile == 'monthly'
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r eval-framework/requirements.txt 2>/dev/null || true
+          pip install anthropic pyyaml
+
+      - name: Run Monthly Eval (30 representative cases, all chains incl. C)
+        run: |
+          python eval-framework/coordinator.py run \
+            --config eval-framework/configs/monthly-compare.yaml \
+            --cases eval-cases/ \
+            --chains A,B,C,D \
+            --parallel 4
+
+      - name: Generate Monthly Comparison Report
+        run: |
+          python eval-framework/comparator.py \
+            --current ${{ env.EVAL_RESULTS_DIR }}/ \
+            --baseline ${{ env.EVAL_RESULTS_DIR }}/baseline-latest/ \
+            --output ${{ env.EVAL_RESULTS_DIR }}/monthly-report.md \
+            --full-report \
+            --include-chain-c
+
+      - name: Upload Eval Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-monthly-${{ github.run_number }}
+          path: ${{ env.EVAL_RESULTS_DIR }}/
+          retention-days: 365

@@ -1,0 +1,22 @@
+# Case-Specific Scoring Rubric
+case_id: case-009-deadlock
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "ABBA 死锁"
+      - "写锁回调中触发 UI 更新需要读锁"
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 4
+  reasoning_depth:
+    weight: 0.15
+    required:
+      - "完整的死锁形成路径分析"
+      - "线程交互图"
+  fix_correctness:
+    weight: 0.20
+    must_include:
+      - "回调移到锁外"
+  defensive_fix_quality:
+    weight: 0.15

@@ -13,6 +13,16 @@
 - **上下文污染风险 (Context_Noise_Risk)**: High / Medium / Low
 - **配置快照状态 (Config_Snapshot_Metadata)**: [掩码理由、Flag 状态等，缺失标 Unavailable]
 
+### Specialized Workflow Inputs（可选）
+- **专项模式**: [functionality-deep-dive / none]
+- **专项触发依据**: [简述触发原因，如：问题含状态机异常 + complexity=complex]
+- **补充输入清单**:
+  - [APM 时序日志]
+  - [Feature Flag 快照]
+  - [状态机定义文件路径]
+  - [并发线程 Dump]
+  - [其他补充数据]
+
 ### 版本对比清单（VERSION_RANGE 专项）
 | 维度 | 正常版本 | 异常版本 | 差异摘要 |
 |---|---|---|---|

@@ -1,0 +1,16 @@
+# Case-Specific Scoring Rubric
+case_id: case-006-simple-npe
+adjustments:
+  attribution_accuracy:
+    weight: 0.40
+    exact_match_criteria:
+      - "setProducts(null) 导致 NPE"
+  contributing_completeness:
+    weight: 0.10
+    expected_count: 2
+  fix_correctness:
+    weight: 0.30
+    must_include:
+      - "null 检查或初始化空列表"
+  defensive_fix_quality:
+    weight: 0.05

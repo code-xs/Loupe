@@ -1,0 +1,17 @@
+# Case Metadata — case-003-lifecycle-coupling
+# Schema: eval-framework/case-schema.yaml
+
+case_id: "case-003-lifecycle-coupling"
+title: "Activity 重建时 ViewModel 与 Fragment 生命周期耦合导致数据丢失"
+category: "生命周期耦合"
+complexity: "Complex"
+platform: "Android"
+intermittent: "必现"
+info_completeness: "日志充分"
+expected_route: "functionality-deep-dive"
+tags:
+  - "lifecycle"
+  - "viewmodel"
+  - "fragment"
+  - "config-change"
+  - "data-loss"

@@ -1,0 +1,18 @@
+# Case-Specific Scoring Rubric
+case_id: case-003-lifecycle-coupling
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "Fragment 恢复逻辑缺陷导致回退第1步"
+      - "LiveData 同引用不触发更新"
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 3
+  fix_correctness:
+    weight: 0.25
+    must_include:
+      - "修复 Activity 重建时的 Fragment 恢复"
+      - "修复 LiveData 值更新逻辑"
+  defensive_fix_quality:
+    weight: 0.10

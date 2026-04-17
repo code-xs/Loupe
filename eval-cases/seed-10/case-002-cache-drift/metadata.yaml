@@ -1,0 +1,16 @@
+# Case Metadata — case-002-cache-drift
+# Schema: eval-framework/case-schema.yaml
+
+case_id: "case-002-cache-drift"
+title: "用户资料页缓存脏读导致显示他人信息"
+category: "缓存脏读"
+complexity: "Complex"
+platform: "iOS"
+intermittent: "极低概率偶发"
+info_completeness: "日志残缺"
+expected_route: "functionality-deep-dive"
+tags:
+  - "cache"
+  - "dirty-read"
+  - "user-profile"
+  - "security"

@@ -1,0 +1,17 @@
+# Case Metadata — case-005-multi-module-chain
+# Schema: eval-framework/case-schema.yaml
+
+case_id: "case-005-multi-module-chain"
+title: "推送-路由-WebView-Native 四模块联动导致页面白屏"
+category: "多模块联动"
+complexity: "Extreme"
+platform: "Android"
+intermittent: "高概率偶发"
+info_completeness: "日志充分"
+expected_route: "functionality-deep-dive"
+tags:
+  - "push"
+  - "router"
+  - "webview"
+  - "native-bridge"
+  - "multi-module"

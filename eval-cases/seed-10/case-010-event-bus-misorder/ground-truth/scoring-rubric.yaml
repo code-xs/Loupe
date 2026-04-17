@@ -1,0 +1,20 @@
+# Case-Specific Scoring Rubric
+case_id: case-010-event-bus-misorder
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "并发网络响应乱序导致事件覆盖"
+      - "EventBus 无序投递"
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 4
+  fix_correctness:
+    weight: 0.25
+    must_include:
+      - "单一真相源或事件版本控制"
+  defensive_fix_quality:
+    weight: 0.10
+    expected_measures:
+      - "点击节流"
+      - "事件版本号"

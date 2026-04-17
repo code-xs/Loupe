@@ -1,0 +1,76 @@
+# Nightly Full Eval Configuration
+# 触发场景: 每日凌晨 — 全量 Case, Chain A+B+D, 单次运行
+# 预估耗时: ~3.1 小时 (4 并行)
+
+description: "夜间全量评估 — 每日凌晨自动触发"
+
+# 执行范围
+cases_dir: "eval-cases/"
+chains: ["A", "B", "D"]
+runs_per_case: 1
+
+# 并行配置
+parallel:
+  max_sessions: 4
+  scheduling_strategy: "chain_first"
+  session_memory_limit: "2GB"
+
+# 超时配置
+timeout:
+  per_phase: 300        # 单阶段超时 5 分钟
+  per_case: 1800        # 单 Case 超时 30 分钟
+  total: 14400          # 总超时 4 小时（含 buffer）
+
+# 重试配置
+retry:
+  max_retries: 2
+  retry_on:
+    - "artifact_missing"
+    - "session_timeout"
+    - "session_crash"
+
+# 评分配置
+scoring:
+  rubric: "eval-framework/scoring-rubric-base.yaml"
+  judge_model: "claude-opus-4-20250514"
+  judge_temperature: 0.1
+  stage_scoring: true       # 启用阶段级拆分评分 (F1-F5)
+
+# 质量门禁
+quality_gate:
+  enabled: true
+  min_score: 0.75
+  max_regression: 0.05
+  zero_score_tolerance: 0
+  min_artifact_rate: 0.90
+
+# 对比基准
+baseline:
+  path: "eval-results/baseline-latest/"
+  auto_update: true           # Nightly 自动更新基准（仅在全部通过时）
+  update_condition: "all_pass" # 仅当所有门禁通过时更新
+
+# 弱点检测
+weakness_detection:
+  enabled: true
+  threshold: 7.0
+  output: "eval-results/nightly-{run_id}/weakness-report.json"
+
+# 输出配置
+output:
+  dir: "eval-results/nightly-{run_id}/"
+  generate_report: true
+  report_format: "markdown"
+  save_artifacts: true
+  save_session_logs: true
+  save_scoring_details: true
+  comparison_report: true
+
+# 通知配置
+notification:
+  on_regression: true
+  on_zero_score: true
+  on_complete: true
+  channels:
+    - type: "webhook"
+      url: "${EVAL_WEBHOOK_URL}"

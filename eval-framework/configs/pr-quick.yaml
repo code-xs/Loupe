@@ -1,0 +1,47 @@
+# PR Quick Eval Configuration
+# 触发场景: Per PR — 10 种子 Case, Chain A+B, 单次运行
+# 预估耗时: ~25 分钟 (4 并行)
+
+description: "PR 快速评估 — 用于每次 PR 的门禁检查"
+
+# 执行范围
+cases_dir: "eval-cases/seed-10/"
+chains: ["A", "B"]
+runs_per_case: 1
+
+# 并行配置
+parallel:
+  max_sessions: 4
+  scheduling_strategy: "chain_first"
+
+# 超时配置
+timeout:
+  per_phase: 300        # 单阶段超时 5 分钟
+  per_case: 1200        # 单 Case 超时 20 分钟
+  total: 2700           # 总超时 45 分钟（含 buffer）
+
+# 评分配置
+scoring:
+  rubric: "eval-framework/scoring-rubric-base.yaml"
+  judge_model: "claude-opus-4-20250514"
+
+# 质量门禁
+quality_gate:
+  enabled: true
+  min_score: 0.75
+  max_regression: 0.05
+  zero_score_tolerance: 0    # 不允许任何 Case 归零
+  min_artifact_rate: 0.90
+
+# 对比基准
+baseline:
+  path: "eval-results/baseline-latest/"
+  auto_update: false          # PR 评估不自动更新基准
+
+# 输出配置
+output:
+  dir: "eval-results/pr-{run_id}/"
+  generate_pr_comment: true
+  report_format: "markdown"
+  save_artifacts: true
+  save_session_logs: true

@@ -1,0 +1,65 @@
+# 自动回复规则配置
+# 用于 eval-framework 自动化执行时处理 <step-pause> 交互
+
+auto_reply_rules:
+  # 证据充分性确认 → 继续
+  - trigger_pattern: '\\[C\\] Continue|\\[R\\] Retry'
+    context_match: '证据.*充分|补充.*上下文|确认.*继续'
+    reply: '[C] Continue'
+    description: '证据充分性确认 → 继续'
+
+  # Fix Design 论证完成 → 继续实施
+  - trigger_pattern: '\\[C\\] Continue.*Phase 5|论证通过'
+    reply: '[C] Continue'
+    description: 'Fix Design 论证通过 → 进入实施'
+
+  # Spec 歧义确认 → 使用推断结果继续
+  - trigger_pattern: 'Spec.*歧义|Expected Behavior'
+    reply: '[C] Confirm'
+    description: 'Spec 歧义 → 采用 AI 推断结果继续'
+
+  # 信息不足请求 → 使用已有信息继续
+  - trigger_pattern: '信息不足|缺失项|需要.*补充'
+    reply: '[S] Submit'
+    description: '信息不足 → 使用已有信息继续'
+
+  # 人工介入请求 → 跳过（自动化模式）
+  - trigger_pattern: '\\[H\\] Human|人工介入|Human-Review'
+    reply: '[S] Skip'
+    description: '人工介入请求 → 跳过（自动化模式下）'
+
+  # 低置信度边界 → 继续执行
+  - trigger_pattern: 'Boundary_Confidence.*Low|置信度不足'
+    reply: '[C] Continue'
+    description: '低置信度边界 → 继续执行'
+
+  # Non-Bug 判定 → 接受
+  - trigger_pattern: 'Non-Bug|非缺陷'
+    reply: '[A] Accept'
+    description: 'Non-Bug 判定 → 接受'
+
+  # RCA 低置信度 → 重试
+  - trigger_pattern: 'RCA-LowConfidence|根因.*置信度不足'
+    reply: '[R] Retry'
+    description: 'RCA 低置信度 → 重试分析'
+
+  # 通用：需要补充信息 → 使用已有信息继续
+  - trigger_pattern: '需要.*补充|请提供.*信息'
+    reply: '[C] Continue with available information'
+    description: '信息补充请求 → 使用已有信息继续'
+
+  # 兜底规则：未匹配 → 默认继续
+  - trigger_pattern: '.*'
+    reply: '[C] Continue'
+    description: '未匹配规则 → 默认继续'
+
+fallback:
+  max_unrecognized_pauses: 3
+  action: 'force_terminate'
+  description: '连续 3 次未识别暂停 → 强制终止会话'
+
+# 自动回复日志设置
+logging:
+  log_all_replies: true
+  log_unmatched: true
+  log_file: '{output_dir}/auto-reply.log'

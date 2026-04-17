@@ -1,0 +1,140 @@
+# Case 元数据 Schema
+# 所有 eval-cases/ 下的 Case 必须符合此 Schema
+
+case_metadata:
+  case_id:
+    type: string
+    required: true
+    description: "唯一标识，格式: case-NNN-description"
+    pattern: "^case-\\d{3}-[a-z0-9-]+$"
+
+  title:
+    type: string
+    required: true
+    description: "一句话描述问题"
+    min_length: 10
+    max_length: 200
+
+  category:
+    type: enum
+    required: true
+    values:
+      - 状态机紊乱
+      - 竞态
+      - 缓存脏读
+      - 生命周期耦合
+      - Crash
+      - 性能
+      - 多模块联动
+      - 网络异常
+      - UI异常
+      - 兼容性
+    description: "问题分类"
+
+  complexity:
+    type: enum
+    required: true
+    values:
+      - Simple
+      - Medium
+      - Complex
+      - Extreme
+    description: "复杂度等级"
+
+  platform:
+    type: enum
+    required: true
+    values:
+      - Android
+      - iOS
+      - Both
+    description: "影响平台"
+
+  intermittent:
+    type: enum
+    required: true
+    values:
+      - 必现
+      - 高概率偶发
+      - 极低概率偶发
+    description: "复现概率"
+
+  info_completeness:
+    type: enum
+    required: true
+    values:
+      - 日志充分
+      - 日志残缺
+      - 仅描述无日志
+    description: "输入信息完整度"
+
+  expected_route:
+    type: enum
+    required: true
+    values:
+      - standard-rca
+      - functionality-deep-dive
+    description: "期望被路由到的分析路径"
+
+  tags:
+    type: list
+    items: string
+    required: false
+    description: "自定义标签，用于筛选和分组"
+
+  author:
+    type: string
+    required: false
+    description: "Case 作者"
+
+  created_at:
+    type: string
+    required: false
+    description: "创建时间，格式: YYYY-MM-DD"
+
+  reviewed_by:
+    type: list
+    items: string
+    required: false
+    description: "交叉审阅人列表"
+
+# Case 目录结构要求
+directory_structure:
+  required_dirs:
+    - input/
+    - ground-truth/
+  required_files:
+    - metadata.yaml
+    - input/issue-description.md
+    - ground-truth/expected-root-cause.md
+    - ground-truth/expected-contributing.md
+    - ground-truth/expected-fix-direction.md
+    - ground-truth/scoring-rubric.yaml
+  optional_dirs:
+    - input/logs/
+    - input/code-snapshot/
+
+# Ground Truth 评分标尺 Schema
+scoring_rubric:
+  attribution_weight_override:
+    type: float
+    required: false
+    description: "归因准确率权重覆盖（默认 0.35）"
+  contributing_weight_override:
+    type: float
+    required: false
+    description: "贡献因子完整性权重覆盖"
+  fix_weight_override:
+    type: float
+    required: false
+    description: "修复方向正确性权重覆盖"
+  partial_match_keywords:
+    type: list
+    items: string
+    required: false
+    description: "部分匹配关键词，用于归因评分"
+  critical_contributing_factors:
+    type: list
+    items: string
+    required: true
+    description: "必须识别的关键贡献因子列表"

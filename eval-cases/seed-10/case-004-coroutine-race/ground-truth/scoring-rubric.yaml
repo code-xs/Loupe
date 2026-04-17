@@ -1,0 +1,18 @@
+# Case-Specific Scoring Rubric
+case_id: case-004-coroutine-race
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "协程取消未阻止 OkHttp 请求"
+      - "RetryInterceptor 重发非幂等请求"
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 3
+  fix_correctness:
+    weight: 0.25
+    must_include:
+      - "协程取消联动 Call.cancel()"
+      - "幂等性保护"
+  defensive_fix_quality:
+    weight: 0.10

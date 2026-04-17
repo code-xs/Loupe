@@ -1,0 +1,14 @@
+# Case-Specific Scoring Rubric
+case_id: case-007-network-timeout
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "无缓存策略且超时过长"
+  fix_correctness:
+    weight: 0.30
+    must_include:
+      - "缓存策略"
+      - "loading 状态"
+  defensive_fix_quality:
+    weight: 0.05

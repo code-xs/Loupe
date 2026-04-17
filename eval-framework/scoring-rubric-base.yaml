@@ -1,0 +1,80 @@
+# 评分标尺基础配置
+# 所有维度的评分标准和权重
+
+# 归因准确率评分标准
+attribution_scoring:
+  exact_match: 10.0          # 主根因精确匹配
+  partial_match: 7.0          # 部分匹配（方向正确但不精确）
+  contributing_match: 4.0     # 仅识别了贡献因子
+  miss: 0.0                   # 完全未命中
+  false_positive: -2.0        # 错误根因（从 0 分扣减）
+
+# 维度权重
+weights:
+  attribution_accuracy: 0.35
+  contributing_completeness: 0.15
+  fix_correctness: 0.20
+  reasoning_depth: 0.10
+  artifact_completeness: 0.10
+  defensive_fix_quality: 0.10
+
+# 阶段级评分（Functionality Deep-Dive）
+stage_scoring:
+  F1_context_reconstruction:
+    auto_checks:
+      - name: "environment_factors_non_empty"
+        description: "环境因子列表非空"
+        weight: 0.3
+    llm_judge:
+      - name: "factor_accuracy"
+        description: "因子与 ground truth 对比"
+        weight: 0.7
+
+  F2_state_topology:
+    auto_checks:
+      - name: "mermaid_syntax_valid"
+        description: "Mermaid 语法校验"
+        weight: 0.3
+    llm_judge:
+      - name: "state_completeness"
+        description: "状态定义完整性"
+        weight: 0.7
+
+  F3_temporal_correlation:
+    auto_checks:
+      - name: "temporal_events_count"
+        description: "时序事件数 ≥ 3"
+        threshold: 3
+        weight: 0.3
+    llm_judge:
+      - name: "race_window_accuracy"
+        description: "竞态窗口准确性"
+        weight: 0.7
+
+  F4_isolation_debate:
+    auto_checks:
+      - name: "debate_rounds"
+        description: "对抗轮数 ≥ 1"
+        threshold: 1
+        weight: 0.2
+    llm_judge:
+      - name: "root_cause_match"
+        description: "主根因与 ground truth 匹配度"
+        weight: 0.8
+
+  F5_defensive_fix:
+    auto_checks:
+      - name: "circuit_breaker_exists"
+        description: "熔断器/断言点存在性"
+        weight: 0.3
+    llm_judge:
+      - name: "architecture_quality"
+        description: "修复方案架构评价"
+        weight: 0.7
+
+# 质量阈值
+quality_thresholds:
+  pass: 7.5                   # ≥ 7.5 分为通过
+  weak: 7.0                   # < 7.0 分标记为薄弱
+  fail: 5.0                   # < 5.0 分标记为失败
+  critical: 3.0               # < 3.0 分标记为严重

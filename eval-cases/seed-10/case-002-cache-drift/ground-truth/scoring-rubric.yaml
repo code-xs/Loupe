@@ -1,0 +1,28 @@
+# Case-Specific Scoring Rubric
+case_id: case-002-cache-drift
+adjustments:
+  attribution_accuracy:
+    weight: 0.35
+    exact_match_criteria:
+      - "双层缓存清理时序不一致"
+      - "磁盘缓存异步清理未完成时被新用户读取"
+    partial_match_criteria:
+      - "缓存未清理"
+      - "登出缓存问题"
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 4
+    key_factors:
+      - "缓存 Key 未绑定用户 ID"
+      - "登出未等待清理完成"
+      - "无用户身份校验"
+      - "无缓存版本标记"
+  fix_correctness:
+    weight: 0.20
+    must_include:
+      - "缓存 Key 用户隔离"
+  defensive_fix_quality:
+    weight: 0.15
+    expected_measures:
+      - "同步清理或等待完成"
+      - "session 标记校验"

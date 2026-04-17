@@ -1,0 +1,56 @@
+# Case-Specific Scoring Rubric
+
+# 基于 scoring-rubric-base.yaml 的 Case 专项调整
+case_id: case-001-state-machine-race
+adjustments:
+  # 本 Case 的核心在于状态机竞态的精确识别
+  attribution_accuracy:
+    weight: 0.40           # 提升权重（默认 0.35）
+    exact_match_criteria:
+      - "异步回收与同步获取的竞态"
+      - "RELEASING 状态下获取播放器失败"
+      - "recycleDistantPlayers 异步化导致"
+    partial_match_criteria:
+      - "播放器状态机问题"
+      - "并发/竞态条件"
+    miss_criteria:
+      - "网络问题"
+      - "UI 渲染问题"
+      - "内存泄漏"
+
+  contributing_completeness:
+    weight: 0.15
+    expected_count: 4
+    key_factors:
+      - "SurfaceTexture 复用延迟"
+      - "低端设备 GC 暂停"
+      - "ViewPager2 回调无节流"
+      - "缺少重试机制"
+
+  fix_correctness:
+    weight: 0.20
+    must_include:
+      - "异步等待或回调机制"
+    should_include:
+      - "状态机子状态设计"
+      - "节流/去抖机制"
+
+  defensive_fix_quality:
+    weight: 0.15           # 提升权重（默认 0.10）
+    expected_measures:
+      - "超时兜底"
+      - "状态机断言"
+      - "熔断器"
+
+stage_scoring:
+  F1_environment_reconstruction:
+    key_factors: ["低端设备内存压力", "GC 暂停", "快速滑动操作模式"]
+  F2_state_topology:
+    required_states: ["IDLE", "PREPARING", "PREPARED", "PLAYING", "PAUSED", "RELEASING", "RELEASED"]
+    required_transitions: ["RELEASING → IDLE (missing/blocked)"]
+  F3_timing_race:
+    critical_window: "recycleDistantPlayers 异步回调与 getIdlePlayer 同步调用之间的 50-200ms 窗口"
+  F4_isolation:
+    primary_root_cause: "异步回收与同步获取竞态"
+  F5_defensive_fix:
+    must_address: ["状态机等待机制", "超时兜底"]

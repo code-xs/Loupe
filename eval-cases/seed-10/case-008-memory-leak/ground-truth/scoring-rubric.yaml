@@ -1,0 +1,14 @@
+# Case-Specific Scoring Rubric
+case_id: case-008-memory-leak
+adjustments:
+  attribution_accuracy:
+    weight: 0.40
+    exact_match_criteria:
+      - "Closure 循环引用导致内存泄漏"
+      - "未使用 weak self"
+  fix_correctness:
+    weight: 0.30
+    must_include:
+      - "[weak self] 或 [unowned self]"
+  defensive_fix_quality:
+    weight: 0.05

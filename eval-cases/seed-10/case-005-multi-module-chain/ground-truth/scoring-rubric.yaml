@@ -1,0 +1,22 @@
+# Case-Specific Scoring Rubric
+case_id: case-005-multi-module-chain
+adjustments:
+  attribution_accuracy:
+    weight: 0.30
+    exact_match_criteria:
+      - "冷启动时 AuthManager 异步初始化未完成"
+      - "四模块时序错配"
+  contributing_completeness:
+    weight: 0.20
+    expected_count: 5
+  reasoning_depth:
+    weight: 0.15
+    required:
+      - "完整的模块交互链分析"
+      - "冷启动 vs 热启动时序对比"
+  fix_correctness:
+    weight: 0.20
+    must_include:
+      - "初始化等待机制"
+  defensive_fix_quality:
+    weight: 0.15

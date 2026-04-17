@@ -215,6 +215,8 @@ class ArtifactChecker:
 
         return missing
 
+    # TODO(tech-debt): 当前硬编码 workflow-status.yaml 路径和状态值判定，
+    #   若未来新增其他专项模式需重构为通用条件表达式引擎
     def _check_expert_condition(self, output_dir: str,
                                 expert_config: dict) -> bool:
         """检查专家模式产物的触发条件"""

@@ -365,12 +365,19 @@ class IDESessionManager:
 
         if session.process is not None:
             try:
-                stdout_bytes, stderr_bytes = session.process.communicate(timeout=5)
+                stdout_bytes, stderr_bytes = session.process.communicate(timeout=15)
                 stdout = stdout_bytes.decode("utf-8", errors="replace")
                 stderr = stderr_bytes.decode("utf-8", errors="replace")
                 exit_code = session.process.returncode or 0
             except subprocess.TimeoutExpired:
                 session.process.kill()
+                # 回收子进程资源，防止僵尸进程
+                try:
+                    out, err = session.process.communicate(timeout=5)
+                    stdout = out.decode("utf-8", errors="replace") if out else ""
+                    stderr = err.decode("utf-8", errors="replace") if err else ""
+                except Exception:
+                    pass
                 exit_code = -1
 
         # 保存会话日志

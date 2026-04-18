@@ -1,0 +1,11 @@
+# UI Deep-Dive Workflow 状态模板
+# [PRESERVE_FORMAT]
+issue_id: null
+parent_issue_id: null
+current_state: DD-Intake
+stepsCompleted: []
+lastStep: null
+workflow_version: "v1-ui"
+confidence: null
+primary_root_cause: null
+# [END_PRESERVE_FORMAT]

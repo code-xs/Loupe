@@ -19,10 +19,18 @@
                 </step>
 
                 <step n="2" goal="初始化或恢复子工作区状态">
-                    <action>读取 {workflow_status}，获取 stepsCompleted、current_state、artifacts</action>
                     <check if="{workflow_status} 文件不存在">
                         <load target="mobile-qa-workflow/functionality-deep-dive/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
                     </check>
+                    <action>读取 {workflow_status}，获取 stepsCompleted、current_state、artifacts、workflow_version、legacy_flow_mode、compat_mapping_applied</action>
+                    <check if="workflow_version 为空">
+                        <action>将当前状态视为旧专项状态，自动补充兼容默认值：
+                            - workflow_version = v3-legacy
+                            - legacy_flow_mode = true
+                            - compat_mapping_applied = false
+                        </action>
+                    </check>
+                    <action>旧专项状态优先沿旧阶段序列继续执行；Batch A0 仅建立兼容识别，不切换专项阶段拓扑</action>
                     <action>根据 stepsCompleted 和 <load target="mobile-qa-workflow/functionality-deep-dive/core/workflow-model.yaml" prompt="加载阶段序列"/> 判断当前应执行的阶段</action>
                 </step>
 

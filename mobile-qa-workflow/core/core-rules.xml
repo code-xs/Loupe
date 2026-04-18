@@ -84,6 +84,7 @@
                            或 &lt;load target="mobile-qa-workflow/functionality-deep-dive/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;（专项子工作流 Agent）
                         3. 注入 config_source 路径</rule>
                     <rule>隔离透传：主 Agent 必须将 subagent_prompt 视为不透明黑盒字符串原样透传，严禁提前解析其中的 load 等标签</rule>
+                    <rule>运行时参数注入：允许在 subagent_prompt 中通过显式文本和 {variable} 占位符注入场景、维度和模式参数；不得假设 agents/*.md 文件内部支持条件模板渲染</rule>
                     <rule>嵌套禁止：SubAgent 中严禁启动新的 SubAgent，必须先返回结果由主 Agent 协调</rule>
                 </rules>
                 <params>
@@ -113,6 +114,13 @@
                     <load target='mobile-qa-workflow/agents/investigator.md' prompt='加载角色定义'/>
                     使用策略 {strategy_a} 执行 OVHSC 推理链，分析 {spec_file} 和 {context_bundle}
                 "/>]]></example>
+            </tag>
+            <tag name="workflow-status-routing">
+                <rules>
+                    <rule>阶段文件可以基于证据和验证结果提出升级、回流或重入，但必须通过 workflow_status 显式回写状态字段表达</rule>
+                    <rule>涉及动态路由时，至少应回写 fanout_mode、reroute_reason、reroute_target_phase；需要计数保护时同步更新 rca_retry_count 或 fix_retry_count</rule>
+                    <rule>主编排器只识别 workflow_status 中的结构化字段，不采信阶段产物中的隐式文字描述作为重路由依据</rule>
+                </rules>
             </tag>
             <tag name="goto">
                 <rule>跳转到指定步骤（用于回退和循环）</rule>

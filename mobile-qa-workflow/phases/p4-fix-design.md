@@ -26,9 +26,11 @@ description: Phase 4 — 修复方案设计，执行四重形式化论证并生�
         <critical>必须优先选择治本策略；治标策略仅在真因短期无法修改时使用，且必须说明原因</critical>
 
         <action>【前置策略路由】读取 rca_report，若根因涉及远端配置、服务端契约变更或第三方依赖漂移 (Remote_Drift_Suspected)，必须优先选择「跨端协调/远端修复」策略，不可盲目修改客户端代码作为妥协。</action>
+        <action>当前修复模式由根因置信度、修改风险和环境能力共同决定；Batch A0 只将模式写回 {workflow_status}，不正式切换 proposer 路由策略。</action>
 
         <switch condition="根因置信度 + 子 Agent 能力">
             <case if="High（≥ 0.8）且因果链完整 且 {env_subagent} == false">
+                <action>更新 {workflow_status}：fanout_mode = single-fix, reroute_reason = null</action>
                 <action>单方案论证模式（主 Agent 独立完成）</action>
                 <action>【论证 1 — Completeness】逐环节标注因果链被切断环节，论证无绕过路径</action>
                 <action>【论证 2 — Safety】调用链 + 共享状态 + 并发安全 + 平台差异</action>
@@ -37,6 +39,7 @@ description: Phase 4 — 修复方案设计，执行四重形式化论证并生�
             </case>
 
             <case if="{env_subagent} == true（多 Agent 对抗模式）">
+                <action>更新 {workflow_status}：fanout_mode = contested-fix, reroute_reason = null</action>
                 <action>启动 2 个 Fix-Proposer 独立生成方案，再由 Challenger + Arbiter 评估</action>
 
                 <invoke-subagent subagent_type="fix-proposer" subagent_prompt="
@@ -78,6 +81,7 @@ description: Phase 4 — 修复方案设计，执行四重形式化论证并生�
             </case>
 
             <case if="Medium（0.5-0.8）且 {env_subagent} == false（单对话降级）">
+                <action>更新 {workflow_status}：fanout_mode = escalated-fix, reroute_reason = medium_confidence_single_dialogue</action>
                 <action>【单对话多方案竞争】顺序模拟多视角：
 
                     【Fix-Proposer-A】
@@ -130,7 +134,7 @@ description: Phase 4 — 修复方案设计，执行四重形式化论证并生�
         <action>更新 {config_source}：output_fix_design = {output_file}</action>
 
         <step-pause title="Fix Design 四重论证完成，请确认是否进入修复实施：\n">
-            <option title="[C] Continue：论证通过，进入 Phase 5 修复实施\n" action="更新 {workflow_status}：current_state = Fix-Implementing"/>
+            <option title="[C] Continue：论证通过，进入 Phase 5 修复实施\n" action="更新 {workflow_status}：current_state = Fix-Implementing, reroute_reason = null, reroute_target_phase = null"/>
             <option title="[R] Revise：修改方案后重新论证\n" action="goto step 2"/>
         </step-pause>
     </step>

@@ -90,6 +90,10 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
 
             记录评估结果：complexity_level = simple | medium | complex
         </action>
+        <action>更新 {workflow_status}：
+            - analysis_complexity = {complexity_level}
+            - analysis_complexity_confidence = [High | Medium | Low]
+        </action>
 
         <action>基于复杂度和上下文选择分析路径：
 
@@ -110,9 +114,11 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
         <switch condition="分析路径">
             <case if="快速路径">
                 <action>标记 analysis_path = fast</action>
+                <action>更新 {workflow_status}：fanout_mode = fast-path, reroute_reason = null</action>
             </case>
             <case if="深度路径">
                 <action>标记 analysis_path = deep</action>
+                <action>更新 {workflow_status}：fanout_mode = deep-path, reroute_reason = null</action>
                 <action>检查深度路径额外证据阈值：至少 2 条 A 级，或 1A+2B</action>
             </case>
         </switch>
@@ -135,6 +141,13 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
             </check>
             <check if="反事实校验失败或策展回溯后仍失败">
                 <action>升级到深度路径，analysis_path = deep</action>
+                <action>更新 {workflow_status}：
+                    - fanout_mode = escalate-required
+                    - reroute_reason = counterfactual_or_curation_failed
+                    - reroute_from_phase = qa-root-cause
+                    - reroute_target_phase = qa-root-cause
+                    - rca_retry_count += 1
+                </action>
             </check>
         </check>
 
@@ -199,7 +212,14 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
 
             <check if="对抗轮次超过 3 轮仍未收敛">
                 <action>Arbiter 强制降级裁定：置信度降为 Low（&lt;0.5）</action>
-                <action>更新 {workflow_status}：current_state = Human-Review</action>
+                <action>更新 {workflow_status}：
+                    - fanout_mode = escalate-required
+                    - reroute_reason = multi_view_non_convergent
+                    - reroute_from_phase = qa-root-cause
+                    - reroute_target_phase = qa-root-cause
+                    - rca_retry_count += 1
+                    - current_state = Human-Review
+                </action>
                 <action>阶段结束，返回编排器</action>
             </check>
         </check>
@@ -294,10 +314,21 @@ description: Phase 3 — 根因分析，通过 OVHSC 推理链和多 Agent 对�
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
         <action>更新 {config_source}：output_rca_report = {output_file}</action>
         <check if="最终置信度 >= 0.5">
-            <action>更新 {workflow_status}：current_state = Fix-Designing</action>
+            <action>更新 {workflow_status}：
+                - current_state = Fix-Designing
+                - reroute_reason = null
+                - reroute_target_phase = null
+            </action>
         </check>
         <check if="最终置信度 < 0.5">
-            <action>更新 {workflow_status}：current_state = RCA-LowConfidence</action>
+            <action>更新 {workflow_status}：
+                - current_state = RCA-LowConfidence
+                - fanout_mode = escalate-required
+                - reroute_reason = low_final_confidence
+                - reroute_from_phase = qa-root-cause
+                - reroute_target_phase = qa-root-cause
+                - rca_retry_count += 1
+            </action>
         </check>
     </step>
 </workflow>

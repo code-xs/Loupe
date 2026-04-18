@@ -12,6 +12,8 @@
         <mandate>务必严格按照指令顺序执行所有步骤</mandate>
         <mandate>严禁将多个 step 合并执行或跳过</mandate>
         <mandate>所有产物必须按模板格式输出</mandate>
+        <mandate>子 Agent 参数注入通过调用处显式拼接和 {variable} 占位完成，不假设 agents/*.md 文件内部支持条件模板渲染</mandate>
+        <mandate>P3 / P4 / P6 的升级、回流和重入必须通过 workflow-status 结构化字段回写驱动，不得只写自然语言说明</mandate>
     </llm>
 
     <supported-tags>
@@ -61,8 +63,16 @@ Spec-Defining → Non-Bug → Accept → Closed
                            → Reflow(>2次) → Human-Review
 Spec-Defining → Spec-Uncertain ─── (用户确认) → Spec-Defining
 RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-Defining
+Verifying → design_insufficient → Fix-Designing
+Verifying → root_cause_not_closed → RCA-InProgress
+Verifying → implementation_mismatch → Fix-Designing
 任意阶段 → Human-Review ─── (人工处理) → 任意阶段
 ```
+
+状态恢复补充规则：
+- 恢复已有会话时优先读取 `workflow_version` / `schema_version`；缺失则按旧版状态补齐默认字段后继续。
+- 编排器优先消费 `reroute_target_phase`，允许 `qa-root-cause` 或 `qa-fix-design` 插队重入。
+- 当 `rca_retry_count > 2` 或 `fix_retry_count > 2` 时，直接进入 `Human-Review`，避免无限回流。
 
 ---
 
@@ -202,6 +212,10 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
             4. 相似案例存在误判历史
             不触发排除：P2/P3 反事实通过 → 采信快速路径 | A 级证据充分指向单一假设 → 无需对抗
         </action>
+        <action>将复杂度与分析模式写回 workflow-status：
+            analysis_complexity / analysis_complexity_confidence / fanout_mode。
+            若快速路径反事实失败、多视角不收敛或最终置信度过低，则额外写回 reroute_reason / reroute_target_phase=qa-root-cause / rca_retry_count。
+        </action>
         <switch condition="分析路径">
             <case if="快速路径">单视角 OVHSC</case>
             <case if="深度路径">多视角 OVHSC + 对抗</case>
@@ -249,6 +263,7 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
         <action>High 置信度(≥0.8) + 单对话 → 单方案四重论证</action>
         <action>多 Agent 模式 → 2 个 Fix-Proposer 独立生成 → Challenger 四重攻击 → Arbiter 裁定</action>
         <action>单对话降级 → 顺序模拟 Proposer A/B → Challenger → Arbiter</action>
+        <action>将当前修复模式写回 workflow-status：single-fix / contested-fix / escalated-fix；Batch A0 只记录模式，不正式切换 proposer 拓扑。</action>
         <action>四重论证：Completeness(根因覆盖) | Safety(副作用) | Correctness(Spec一致) | Minimality(最小变更)</action>
     </step>
     <step n="3" goal="方案确认与评估矩阵">
@@ -361,7 +376,14 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
     </step>
     <step n="5" goal="验证判定">
         <check if="L1+L2+L3-Static 全通过">继续</check>
-        <check if="任一层未通过">回退 Fix-Designing</check>
+        <check if="任一层未通过">
+            <action>先分类失败类型：design_insufficient / root_cause_not_closed / implementation_mismatch</action>
+            <action>按类型写回 workflow-status：
+                design_insufficient → reroute_target_phase=qa-fix-design
+                root_cause_not_closed → reroute_target_phase=qa-root-cause 且 fanout_mode=escalate-required
+                implementation_mismatch → reroute_target_phase=qa-fix-design
+            </action>
+        </check>
     </step>
     <step n="6" goal="输出 Verification Report + Knowledge Card">
         <template-output template="verification-report"/>

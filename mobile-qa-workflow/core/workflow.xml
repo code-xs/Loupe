@@ -22,11 +22,29 @@
 
         <step n="2" goal="判断当前阶段并加载工作流">
             <action>读取 {config_source} 文件，获取 {env_subagent} 等环境能力配置</action>
-            <action>读取 {workflow_status} 文件，获取 stepsCompleted 和 current_state</action>
             <check if="{workflow_status} 文件不存在">
                 <load target="mobile-qa-workflow/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
             </check>
-            <action>根据 stepsCompleted 和 <load target="mobile-qa-workflow/core/workflow-model.yaml" prompt="加载阶段序列"/> 判断当前应执行的阶段，将阶段名作为 {current_phase}，阶段路径作为 {current_phase_path}</action>
+            <action>读取 {workflow_status} 文件，获取 stepsCompleted、current_state、workflow_version、fanout_mode、reroute_target_phase、rca_retry_count、fix_retry_count</action>
+            <check if="workflow_version 为空">
+                <action>将当前状态视为旧版状态文件，补充兼容默认值：
+                    - workflow_version = legacy
+                    - fanout_mode = null
+                    - reroute_reason = null
+                    - reroute_target_phase = null
+                    - rca_retry_count = 0
+                    - fix_retry_count = 0
+                </action>
+            </check>
+            <check if="reroute_target_phase == qa-root-cause">
+                <action>优先处理结构化重路由：将 {current_phase} 强制设为 qa-root-cause，并清空 reroute_target_phase 以避免重复插队</action>
+            </check>
+            <check if="reroute_target_phase == qa-fix-design">
+                <action>优先处理结构化重路由：将 {current_phase} 强制设为 qa-fix-design，并清空 reroute_target_phase 以避免重复插队</action>
+            </check>
+            <check if="reroute_target_phase 为空">
+                <action>根据 stepsCompleted 和 <load target="mobile-qa-workflow/core/workflow-model.yaml" prompt="加载阶段序列"/> 判断当前应执行的阶段，将阶段名作为 {current_phase}，阶段路径作为 {current_phase_path}</action>
+            </check>
         </step>
 
         <step n="3" goal="执行当前阶段">
@@ -96,6 +114,9 @@
                 <action>保留 {workflow_status} 的 stepsCompleted 不变，等待当前阶段人工处理或补充信息后再重试</action>
             </check>
             <action>更新 {workflow_status} 的 lastStep 为 {current_phase}</action>
+            <check if="rca_retry_count > 2 或 fix_retry_count > 2">
+                <action>触发重试熔断保护：更新 {workflow_status}：current_state = Human-Review</action>
+            </check>
 
             <switch condition="{current_state}">
                 <case if="Info-Insufficient">

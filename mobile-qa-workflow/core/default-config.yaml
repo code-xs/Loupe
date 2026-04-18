@@ -32,6 +32,10 @@ env_file_system: true
 env_git: true
 env_lint_tools: true
 env_subagent: true
+routing_policy_version: "a0"
+active_fanout_policy: null
+output_runtime_compat_report: null
+output_reroute_trace: null
 
 # Git 分支信息（Phase 5 填写）
 fix_branch: null

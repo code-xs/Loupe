@@ -8,3 +8,7 @@ output_deep_dive_rca: null
 output_defensive_fix_design: null
 output_deep_dive_summary: null
 env_subagent: true
+workflow_version: "v3-legacy"
+routing_policy_version: "a0"
+legacy_agent_set: true
+compat_mode: true

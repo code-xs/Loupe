@@ -94,12 +94,51 @@ description: Phase 6 — 验证与闭环，执行三层验证模型并生成 Kno
     </step>
 
     <step n="6" goal="验证判定">
+        <action>若存在失败项，先进行失败分类并写回 {workflow_status}：
+            - design_insufficient：修复方案覆盖不足、风险论证不完整、回归设计缺失
+            - root_cause_not_closed：修复后仍无法闭合原始因果链，或验证暴露新的上游根因缺口
+            - implementation_mismatch：方案正确但实现与设计不一致或落地遗漏
+        </action>
         <check if="L1 + L2 + L3-Static 全部通过">
+            <action>更新 {workflow_status}：verification_failure_type = null, reroute_reason = null, reroute_target_phase = null</action>
             <action>验证通过，继续生成 Knowledge Card</action>
         </check>
         <check if="任一层未通过">
             <action>列出失败项，附修复方向建议</action>
-            <action>更新 {workflow_status}：current_state = Fix-Designing（回退）</action>
+            <switch condition="{verification_failure_type}">
+                <case if="design_insufficient">
+                    <action>更新 {workflow_status}：
+                        - current_state = Fix-Designing
+                        - reroute_reason = verification_design_insufficient
+                        - reroute_from_phase = qa-verification
+                        - reroute_target_phase = qa-fix-design
+                        - fix_retry_count += 1
+                    </action>
+                </case>
+                <case if="root_cause_not_closed">
+                    <action>更新 {workflow_status}：
+                        - current_state = RCA-InProgress
+                        - verification_failure_type = root_cause_not_closed
+                        - fanout_mode = escalate-required
+                        - reroute_reason = verification_root_cause_not_closed
+                        - reroute_from_phase = qa-verification
+                        - reroute_target_phase = qa-root-cause
+                        - rca_retry_count += 1
+                    </action>
+                </case>
+                <case if="implementation_mismatch">
+                    <action>更新 {workflow_status}：
+                        - current_state = Fix-Designing
+                        - reroute_reason = verification_implementation_mismatch
+                        - reroute_from_phase = qa-verification
+                        - reroute_target_phase = qa-fix-design
+                        - fix_retry_count += 1
+                    </action>
+                </case>
+                <default>
+                    <action>更新 {workflow_status}：current_state = Human-Review</action>
+                </default>
+            </switch>
             <action>阶段结束，返回编排器</action>
         </check>
     </step>

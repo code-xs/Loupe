@@ -20,6 +20,11 @@ description: >-
 - config_source: `{workspace_root}/{issue_id}/config_source.yaml`
 - workflow_status: `{workspace_root}/{issue_id}/workflow-status.yaml`
 
+## 运行时恢复约束
+- 恢复已有问题时，先读取 `workflow-status.yaml` 中的 `workflow_version` / `schema_version`，缺失则按旧版状态补齐兼容默认值后再继续编排。
+- `P3 / P4 / P6` 的动态路由状态统一写入 `workflow-status.yaml`，主编排器只读取结构化字段（如 `fanout_mode`、`reroute_reason`、`reroute_target_phase`），不依赖阶段产物中的自由文本描述。
+- `{variable}` 占位用于运行时变量注入；子 Agent 参数通过调用处 `subagent_prompt` 显式拼接传递，不假设 `agents/*.md` 文件内部支持模板渲染。
+
 <flow>
     <step n="1" goal="加载流程规范">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="加载并执行，作为流程规范严格遵守"/>
@@ -27,7 +32,7 @@ description: >-
 
     <step n="2" goal="初始化或恢复工作区">
         <check if="用户指定了 {issue_id}（恢复已有问题）">
-            <action>读取 {config_source} 和 {workflow_status}，恢复工作区上下文</action>
+            <action>读取 {config_source} 和 {workflow_status}，恢复工作区上下文，并优先识别状态模板版本与结构化重路由字段</action>
         </check>
         <check if="用户未指定 {issue_id}（新问题）">
             <action>生成 Issue ID，格式 YYYYMMDD-HHmmss（使用当前精确到秒的时间戳，如 20241201-153000，确保每次会话物理隔离）</action>

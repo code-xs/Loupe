@@ -26,6 +26,15 @@
 
 ---
 
+## 动态路由与状态恢复
+
+- `{variable}` 占位表示运行时变量注入；场景参数、维度参数、模式参数应在调用处写入 `subagent_prompt`，而不是依赖 `agents/*.md` 文件内部模板渲染。
+- `workflow-status.yaml` 是动态路由唯一可信状态源；`fanout_mode`、`reroute_reason`、`reroute_target_phase`、重试计数等字段由阶段文件写回，由主编排器读取并执行。
+- 恢复已有会话时必须优先识别 `workflow_version` / `schema_version`；旧状态缺字段时，需要先补兼容默认值，再恢复阶段执行。
+- Dify / Coze / LangGraph / AutoGen 等外部平台若自行接管状态存储，必须自己保证状态版本兼容、重路由字段持久化和重试熔断逻辑。
+
+---
+
 ## Full 能力平台
 
 `mobile-qa-workflow/` 目录是唯一权威源。`.cursor/skills/mobile-qa-workflow` 与 `.trae/skills/mobile-qa-workflow`
@@ -77,13 +86,13 @@
 
 1. 创建 Agent 应用
 2. 将 `system-prompt.md` 全文粘贴到 System Prompt
-3. 状态管理：使用 Dify 的 **Conversation Variable** 存储 `current_state`、`stepsCompleted`
+3. 状态管理：使用 Dify 的 **Conversation Variable** 存储 `current_state`、`stepsCompleted`、`workflow_version`、`fanout_mode`、`reroute_target_phase`
 4. 每轮对话末尾由 AI 输出状态更新摘要，下轮自动附带
 
 ### Coze
 
 1. 创建 Bot，在 Persona & Prompt 中粘贴 `system-prompt.md`
-2. 利用 **Long Term Memory** 存储状态（`current_state`、`stepsCompleted`、产物摘要）
+2. 利用 **Long Term Memory** 存储状态（`current_state`、`stepsCompleted`、`workflow_version`、重路由字段、产物摘要）
 3. 如有 Plugin 能力，可配置 Lint 工具调用
 
 ### OpenAI Assistants API
@@ -97,6 +106,7 @@ assistant = client.beta.assistants.create(
 )
 ```
 - 每个 Issue 一个 Thread，状态存在 Thread Metadata
+- Thread Metadata 至少保留 `workflow_version`、`fanout_mode`、`reroute_target_phase`、`rca_retry_count`、`fix_retry_count`
 - 利用 Code Interpreter 执行 AST 验证
 
 ### LangChain / LangGraph

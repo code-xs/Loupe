@@ -8,7 +8,11 @@ output_deep_dive_rca: null
 output_defensive_fix_design: null
 output_deep_dive_summary: null
 env_subagent: true
-workflow_version: "v3-legacy"
-routing_policy_version: "a0"
-legacy_agent_set: true
+workflow_version: "v4-composite"
+routing_policy_version: "abc-1"
+legacy_agent_set: false
 compat_mode: true
+artifact_policy: "appendix-first"
+emit_environment_factor_report: false
+emit_topology_report: false
+emit_concurrency_report: false

@@ -11,8 +11,12 @@ confidence: null
 primary_root_cause: null
 contributing_factor_count: 0
 artifacts: []
-workflow_version: "v3-legacy"
-schema_version: 2
-legacy_flow_mode: true
+workflow_version: "v4-composite"
+schema_version: 3
+legacy_flow_mode: false
 compat_mapping_applied: false
+appendix_only_artifacts:
+  environment_factor_report: true
+  deep_dive_topology: true
+  concurrency_analysis_report: true
 # [END_PRESERVE_FORMAT]

@@ -1,6 +1,8 @@
 # Deep-Dive Topology — {Issue-ID}
 
-## State Definitions
+> 可按需独立落盘；默认优先沉入 `functionality-deep-dive-rca.md` 附录。
+
+## State Topology
 | State ID | Class | State | Trigger | Liveness |
 |----------|-------|-------|---------|----------|
 | S1 | [Class] | [State] | [条件] | [Live/Suspect] |
@@ -12,18 +14,10 @@ stateDiagram-v2
     S1 --> S2 : [Event] / [Guard] / [Action]
 ```
 
-## Isolated States
-- [Sx] [描述]
-
 ## Illegal Transitions
 - [Sa -> Sb] [描述]
 
-## Data Flow
-| Model | Source | Consumer | Mutability | Risk |
-|-------|--------|----------|------------|------|
-| [Model] | [DB/Network] | [UI/Disk] | [Mutable/Immutable] | [High/Medium/Low] |
-
-## Dirty Writes
+## Data Flow And Dirty Writes
 | Location | Description | Line |
 |----------|-------------|------|
 | [Class.method] | [描述] | [L123 / Line-Uncertain] |

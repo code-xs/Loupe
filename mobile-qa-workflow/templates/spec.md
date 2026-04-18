@@ -20,6 +20,12 @@
 - **Spec 状态**: 确认 / Spec-Uncertain
 - **Spec 依赖说明**: [若为 Spec-Uncertain，列出多种可能的 Expected Behavior]
 
+### Analysis Routing
+- **Analysis Complexity**: [simple / medium / complex]
+- **Complexity Confidence**: [High / Medium / Low]
+- **Suggested Fan-out Mode**: [simple-single / medium-challenge / complex-arbitrated]
+- **Complexity Rationale**: [为什么这样判定；引用复现性、证据质量、模块数量、时序/状态特征]
+
 ---
 
 ### 分类扩展模块（根据 Issue Card 主分类 + 次分类加载对应模块）
@@ -33,7 +39,6 @@
 #### 业务规则（Business Rules）
 - [BR1] 当[前置条件]时，操作[X]应产生结果[Y]
 - [BR2] ...
-（从 PRD/产品文档提取，若不存在则与用户/PM确认）
 
 #### 状态转换图（State Transitions）
 [当前功能涉及的状态机]
@@ -54,7 +59,7 @@
 
 ## UI/UX 类 Spec 扩展
 
-> **UI/UX 证据优先级原则**：必须以结构化数据（Layout Inspector 导出 / ConstraintLayout XML / AutoLayout 代码约束）为主要证据，截图仅作 C 级辅助参考。VLM 对移动端像素级差异（≤2dp 偏差、细微颜色差异）存在显著幻觉，不可用于精确差异判断。
+> **UI/UX 证据优先级原则**：必须以结构化数据（Layout Inspector 导出 / ConstraintLayout XML / AutoLayout 代码约束）为主要证据，截图仅作 C 级辅助参考。VLM 对移动端像素级差异存在显著幻觉，不可用于精确差异判断。
 
 ```markdown
 ### UI/UX Spec Extension
@@ -66,7 +71,6 @@
   - 布局文件引用: [Layout XML / SwiftUI 代码 / XIB/Storyboard 路径]
   - Layout Inspector / View Debugger 导出: [结构化视图树数据]
   - 精确差异标注: [元素名 / 属性 / 期望值 vs 实际值]
-    示例: `btnSubmit.marginBottom = 16dp (设计稿) vs 0dp (实际), 偏差 16dp`
 
 #### 布局约束定义（Layout Constraints）
 - 容器: [父容器尺寸 + 布局方式]
@@ -102,8 +106,7 @@
 - 重试策略: [重试次数/退避策略/幂等性]
 
 #### 错误处理链（Error Handling Chain）
-网络层(OkHttp/URLSession) -> 协议层(HTTP状态码)
-  -> 业务层(业务错误码) -> 展示层(用户提示)
+网络层 -> 协议层 -> 业务层 -> 展示层
 标注: 在哪一层的错误处理不符合预期
 
 #### 环境依赖（Environment Dependencies）
@@ -114,7 +117,7 @@
 
 #### 并发与时序（Concurrency & Timing）
 - 并发请求: [同一接口是否有并发调用？是否需要去重/排队？]
-- 请求依赖链: [A完成后才能B？是否存在时序竞争？]
+- 请求依赖链: [A 完成后才能 B？是否存在时序竞争？]
 - 缓存策略: [本地缓存与服务端数据的一致性策略]
 ```
 

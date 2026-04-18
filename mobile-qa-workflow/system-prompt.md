@@ -35,6 +35,12 @@
     </human-review-protocol>
 </core-rules>
 
+## 0.1 角色口径
+
+- **业务角色**：`curator`、`investigator`、`challenger`、`arbiter`、`fix-proposer`、`coder-agent`、Functionality Deep-Dive 复合角色、UI Deep-Dive 复合角色。
+- **能力型 Agent**：仅提供检索或基础能力，不计入业务角色数量统计，例如 `search`。
+- **共享基座**：`challenger` / `arbiter` 通过共享基座 + 场景包装层工作，场景参数由调用处显式注入，不依赖内部模板渲染。
+
 ---
 
 ## 1. 阶段序列（Workflow Model）
@@ -195,45 +201,20 @@ Verifying → implementation_mismatch → Fix-Designing
     <step n="2" goal="Context Bundle 降维裁剪">
         <check if="上下文超 80K tokens">按优先级裁剪：A 级 > Spec > B 级 > 代码 > Commit > C 级</check>
     </step>
-    <step n="3" goal="双层路由 (边界驱动与复杂度评估)">
-        <action>第一层路由 (边界驱动): EXACT_MR -> Diff Focus | VERSION_RANGE -> Commit Denoising | HISTORICAL_UNCLEAR -> Dynamic Bottom-Up</action>
-        <action>双轨低成本验证: 若 Boundary_Confidence==Low，同时对主/备边界执行快速路径，一致采信，不一致转人工。</action>
-        <action>第二层路由 (复杂度评估): 按问题分类细化评估复杂度（simple/medium/complex）：
-            稳定性/性能类：简单(堆栈完整+100%复现) | 中等(框架层溯源+条件复现) | 复杂(无堆栈+跨进程时序)
-            功能类：简单(单操作+线性数据流) | 中等(多步骤+状态机+前后端交互) | 复杂(偶发+并发+多模块耦合)
-            UI/UX 类：简单(全设备一致+单视图) | 中等(特定尺寸/密度+动态布局) | 复杂(偶发+异步重排+系统耦合)
-            网络类：简单(固定4xx/5xx) | 中等(间歇超时+特定环境) | 复杂(偶发不一致+竞态+CDN/DNS)
-            兼容性类：简单(API 不可用) | 中等(厂商 ROM 差异) | 复杂(特定设备+OS 组合+多 SDK 冲突)
-        </action>
-        <action>深度路径触发条件（满足任一）：
-            1. 快速路径反事实校验失败（必然触发）
-            2. P0/P1 且 medium/complex
-            3. 跨模块/跨端 + 矛盾证据
-            4. 相似案例存在误判历史
-            不触发排除：P2/P3 反事实通过 → 采信快速路径 | A 级证据充分指向单一假设 → 无需对抗
-        </action>
-        <action>将复杂度与分析模式写回 workflow-status：
-            analysis_complexity / analysis_complexity_confidence / fanout_mode。
-            若快速路径反事实失败、多视角不收敛或最终置信度过低，则额外写回 reroute_reason / reroute_target_phase=qa-root-cause / rca_retry_count。
-        </action>
-        <switch condition="分析路径">
-            <case if="快速路径">单视角 OVHSC</case>
-            <case if="深度路径">多视角 OVHSC + 对抗</case>
-        </switch>
+    <step n="3" goal="双层路由：边界策略 + 动态 Fan-out">
+        <action>第一层路由仍由边界驱动：EXACT_MR -> Diff Focus | VERSION_RANGE -> Commit Denoising | HISTORICAL_UNCLEAR -> Dynamic Bottom-Up。</action>
+        <action>第二层路由优先读取 Spec 中的 `Analysis Complexity / Complexity Confidence / Suggested Fan-out Mode`，缺失时回退推断。</action>
+        <action>P3 三档 fan-out：`simple-single` = 单视角 OVHSC；`medium-challenge` = `investigator + challenger`；`complex-arbitrated` = `2 investigators + challenger + arbiter`。</action>
+        <action>共享 challenger 调用时显式注入：scene = RCA, dimension_set = rca-5d；共享 arbiter 调用时显式注入：scene = RCA。</action>
+        <action>升级条件：快速路径反事实失败 / 最终置信度过低 / Challenger 出现 Critical / P6 因 root_cause_not_closed 回流。</action>
+        <action>将 `analysis_complexity`、`analysis_complexity_confidence`、`fanout_mode`、`reroute_reason`、`reroute_target_phase`、`rca_retry_count` 写回 workflow-status。</action>
     </step>
     <step n="4" goal="OVHSC 结构化推理链">
-        <action>
-            OBSERVE: 分离直接信号 vs 关联噪声
-            HYPOTHESIZE: 逆向构建假设，每假设标注可证伪预测
-            VERIFY: 预测比对，至少 1 个 Mismatch 才可否定。若发现更精确边界则回溯 Boundary-Refined。若所有假设均被证伪则触发策展回溯。
-            SCORE: base_score × convergence_factor × challenge_survival_rate
-            CHAIN: 用证据 + 逻辑推导画完整因果链，每环标注证据等级
-        </action>
+        <action>OBSERVE -> HYPOTHESIZE -> VERIFY -> SCORE -> CHAIN；SCORE 使用 shared-arbiter-base 中统一的 `final_confidence` 口径。</action>
     </step>
-    <step n="5" goal="深度路径：多视角分析">
-        <action>若无子 Agent → 单对话顺序模拟 Investigator A/B → Challenger → Arbiter</action>
-        <action>Challenger 质疑协议：因果充分性 / 因果必要性 / 证据可靠性 / 遗漏假设 / 平台盲区 / 时间漂移(条件) / 激活质疑(条件)</action>
-        <action>对抗超 3 轮未收敛 → Human-Review</action>
+    <step n="5" goal="专项路由">
+        <action>功能复杂问题可进入 `Functionality Deep-Dive`；复杂 UI / 布局 / 渲染 / 交互问题可进入 `UI Deep-Dive`。</action>
+        <action>专项回注后，主 RCA 必须吸收专项摘要中的主根因、关键证据、置信度与附录建议。</action>
     </step>
     <step n="6" goal="客户端-服务端边界判定">
         <check if="功能类/网络类">抓包确认 → 判定归属 → 服务端问题 Handoff</check>
@@ -255,25 +236,25 @@ Verifying → implementation_mismatch → Fix-Designing
 ```xml
 <workflow>
     <step n="1" goal="加载流程规范和上游产物">
-        <action>读取 Issue Card、Spec、RCA Report，加载修复策略知识库</action>
+        <action>读取 Issue Card、Spec、RCA Report，按需读取 `deep-dive-summary.md` / `ui-deep-dive-summary.md`，并加载修复策略知识库。</action>
         <critical>优先治本策略；治标仅在真因短期无法修改时使用</critical>
     </step>
-    <step n="2" goal="修复路径选择与方案生成">
-        <action>若根因涉及远端漂移 (Remote_Drift_Suspected)，优先选跨端协调/远端修复策略，不盲目修改客户端代码。</action>
-        <action>High 置信度(≥0.8) + 单对话 → 单方案四重论证</action>
-        <action>多 Agent 模式 → 2 个 Fix-Proposer 独立生成 → Challenger 四重攻击 → Arbiter 裁定</action>
-        <action>单对话降级 → 顺序模拟 Proposer A/B → Challenger → Arbiter</action>
-        <action>将当前修复模式写回 workflow-status：single-fix / contested-fix / escalated-fix；Batch A0 只记录模式，不正式切换 proposer 拓扑。</action>
-        <action>四重论证：Completeness(根因覆盖) | Safety(副作用) | Correctness(Spec一致) | Minimality(最小变更)</action>
+    <step n="2" goal="风险分层与动态 Proposal 路由">
+        <action>输出 `fix_risk_level = low | medium | high` 与 `fix_strategy_mode = single-proposer | challenged-proposer | contested-arbitrated`。</action>
+        <action>`single-proposer`：高置信度 + 单点改动 + 低风险；`challenged-proposer`：中置信度或中风险；`contested-arbitrated`：多方案竞争 / 高风险 / P6 回流。</action>
+        <action>共享 challenger 调用时显式注入：scene = FIX, dimension_set = fix-4a；共享 arbiter 调用时显式注入：scene = FIX。</action>
+        <action>将 `fix_strategy_mode`、`fix_risk_level`、必要的 `reroute_reason` 回写到 workflow-status。</action>
     </step>
-    <step n="3" goal="方案确认与评估矩阵">
-        <action>评估矩阵：根因覆盖度(30%) | 副作用风险(25%) | 变更最小性(15%) | 跨平台一致性(10%) | 可回滚性(10%) | 长期可维护性(10%)</action>
+    <step n="3" goal="四重论证与方案收敛">
+        <action>四重论证：Completeness | Safety | Correctness | Minimality。</action>
+        <action>当模式为 `contested-arbitrated` 时，必须输出竞争方案记录与评估矩阵。</action>
     </step>
-    <step n="4" goal="跨平台一致性评估">
+    <step n="4" goal="跨平台与专项附录整合">
         <check if="Both 平台">L1-视觉一致性 | L2-行为一致性(优先) | L3-容错一致性(底线)</check>
+        <action>若专项摘要存在，则在 Fix Design 中显式引用并吸收专项约束。</action>
     </step>
     <step n="5" goal="回归测试设计">
-        <action>TC1(直接) / TC2(边界) / TC3(回归) / TC4(跨平台)</action>
+        <action>TC1(直接) / TC2(边界) / TC3(回归) / TC4(跨平台) / TC5(专项附录验证，按需)</action>
     </step>
     <step n="6" goal="输出 Fix Design Document">
         <template-output template="fix-design"/>

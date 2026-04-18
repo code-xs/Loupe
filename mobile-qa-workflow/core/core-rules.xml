@@ -9,6 +9,11 @@
         <mandate>遇到 invoke-subagent 标签时，必须将 subagent_prompt 内容作为不透明黑盒字符串原样透传，严禁主 Agent 提前解析</mandate>
     </llm>
 
+    <agent-taxonomy>
+        <rule>业务角色：直接承担 RCA、Fix、Deep-Dive 等业务闭环职责的 Agent，例如 curator、investigator、challenger、arbiter、fix-proposer、coder-agent 以及各类 deep-dive analyst。</rule>
+        <rule>能力型 Agent：为工作流提供检索或基础能力，但不计入业务角色数量统计，例如 `search`。</rule>
+    </agent-taxonomy>
+
     <WORKFLOW-RULES critical="true">
         <rule n="1">step 按精确的数字顺序执行 (1, 2, 3...)</rule>
         <rule n="2">每个阶段产物必须保存后才能进入下一阶段</rule>
@@ -18,9 +23,7 @@
 
     <supported-tags desc="Mobile QA Workflow 支持的标签">
         <structural>
-            <tag name="flow">
-                <rule>定义工作流程的顶层容器</rule>
-            </tag>
+            <tag name="flow"><rule>定义工作流程的顶层容器</rule></tag>
             <tag name="step">
                 <rules>
                     <rule>定义步骤编号和目标</rule>
@@ -31,43 +34,17 @@
                     <param name="goal">步骤目标</param>
                 </params>
             </tag>
-            <tag name="check">
-                <rule>条件判断块，包含条件表达式和对应操作</rule>
-                <params>
-                    <param name="if">条件表达式</param>
-                </params>
-            </tag>
-            <tag name="switch">
-                <rule>基于变量值的多分支条件判断</rule>
-                <params>
-                    <param name="condition">分支判断变量</param>
-                </params>
-            </tag>
-            <tag name="for-each">
-                <rule>遍历集合中的元素</rule>
-                <params>
-                    <param name="collection">需要遍历的集合</param>
-                </params>
-            </tag>
+            <tag name="check"><rule>条件判断块，包含条件表达式和对应操作</rule><params><param name="if">条件表达式</param></params></tag>
+            <tag name="switch"><rule>基于变量值的多分支条件判断</rule><params><param name="condition">分支判断变量</param></params></tag>
+            <tag name="for-each"><rule>遍历集合中的元素</rule><params><param name="collection">需要遍历的集合</param></params></tag>
         </structural>
 
         <execution>
-            <tag name="action">
-                <rule>要执行的具体操作</rule>
-                <params>
-                    <param name="if">单个条件操作（内联）</param>
-                </params>
-            </tag>
+            <tag name="action"><rule>要执行的具体操作</rule><params><param name="if">单个条件操作（内联）</param></params></tag>
             <tag name="load">
                 <rule>加载并获取目标内容，严格遵循其描述执行</rule>
                 <rules>
-                    <rule critical="true">【工具路由防呆与白名单】
-                        1. 本地加载：若 target 包含本地文件后缀（如 .xml, .md, .yaml）或为相对路径/绝对路径，强制且唯一使用本地 [Read] 工具读取文件内容，严禁调用 mcp_get_prompt 等任何外部 MCP 平台工具。
-                        2. 外部加载：若 target 包含 'http' 或特定系统前缀，才允许使用对应的 MCP/外部网络工具。
-                            - 飞书文档（如 bytedance.larkoffice.com）：优先使用 mcp_lvcc_get_lark_doc_content 工具。
-                            - 其他外部链接：使用标准的 WebFetch 等网络工具获取。
-                        3. 错误恢复：若调用某个工具获取内容失败（如缺少环境变量、协议不支持），必须立即检查是否选错了工具类型（本地错用MCP/外部错用本地），并自动切换工具重试。
-                    </rule>
+                    <rule critical="true">本地文件一律使用 Read；只有外部链接才允许走 MCP/网络工具。</rule>
                 </rules>
                 <params>
                     <param name="target">要加载的本地相对/绝对路径，或外部系统链接/ID</param>
@@ -78,13 +55,9 @@
                 <rules>
                     <rule>启动子 Agent 执行隔离任务</rule>
                     <rule>强制启动：遇到此标签时必须立即启动一个新的 SubAgent，严禁主 Agent 在调用处进行任何预处理</rule>
-                    <rule>角色注入：启动后的 SubAgent prompt 必须强制包含：
-                        1. 加载 core-rules.xml：&lt;load target="mobile-qa-workflow/core/core-rules.xml" prompt="加载并执行"/&gt;
-                        2. 加载角色定义：&lt;load target="mobile-qa-workflow/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;（主工作流 Agent）
-                           或 &lt;load target="mobile-qa-workflow/functionality-deep-dive/agents/{subagent_type}.md" prompt="加载角色定义"/&gt;（专项子工作流 Agent）
-                        3. 注入 config_source 路径</rule>
-                    <rule>隔离透传：主 Agent 必须将 subagent_prompt 视为不透明黑盒字符串原样透传，严禁提前解析其中的 load 等标签</rule>
-                    <rule>运行时参数注入：允许在 subagent_prompt 中通过显式文本和 {variable} 占位符注入场景、维度和模式参数；不得假设 agents/*.md 文件内部支持条件模板渲染</rule>
+                    <rule>角色注入：启动后的 SubAgent prompt 必须强制包含 core-rules、角色定义以及 config_source 路径</rule>
+                    <rule>允许在 subagent_prompt 中额外加载共享基座或参考文件，例如 shared-challenger-base / shared-arbiter-base。</rule>
+                    <rule>运行时参数注入：允许通过显式文本和 {variable} 占位符注入 scene、dimension_set、mode、risk_level 等参数；不得假设 agents/*.md 文件内部支持条件模板渲染。</rule>
                     <rule>嵌套禁止：SubAgent 中严禁启动新的 SubAgent，必须先返回结果由主 Agent 协调</rule>
                 </rules>
                 <params>
@@ -95,73 +68,43 @@
                     <agent-group name="main-workflow" desc="主工作流 Agent（mobile-qa-workflow/agents/）">
                         <agent name="curator" scenario="策展">上下文净化、存活性校验、配置掩码</agent>
                         <agent name="investigator" scenario="归因">执行 OVHSC 推理链，输出根因假设和因果链</agent>
-                        <agent name="challenger" scenario="归因+修复">对结论执行五维质疑（归因）或四重攻击（修复）</agent>
-                        <agent name="arbiter" scenario="归因+修复">汇总仲裁 + 置信度校准 / 评估矩阵裁定</agent>
+                        <agent name="challenger" scenario="归因+修复">共享 challenger 基座 + 场景包装层</agent>
+                        <agent name="arbiter" scenario="归因+修复">共享 arbiter 基座 + 场景包装层</agent>
                         <agent name="fix-proposer" scenario="修复">独立设计修复方案并执行四重论证</agent>
                         <agent name="coder-agent" scenario="修复实施">契约溯源 + 精确编码 + 微验证纠错 + 产出移交</agent>
                     </agent-group>
                     <agent-group name="functionality-deep-dive" desc="功能疑难专项 Agent（mobile-qa-workflow/functionality-deep-dive/agents/）">
-                        <agent name="context-reconstructor" scenario="环境重构">重建隐蔽环境因子，输出环境关联结论</agent>
-                        <agent name="state-analyst" scenario="状态分析">逆向状态机、数据流追踪与不可变性审查</agent>
-                        <agent name="temporal-analyst" scenario="时序分析">对齐多维时间轴、识别竞态窗口与复现路径</agent>
-                        <agent name="challenger" scenario="专项质疑">七维质疑（含状态机、生命周期、缓存、并发）</agent>
-                        <agent name="arbiter" scenario="专项仲裁">汇总专项分析、收敛主根因与贡献因子</agent>
+                        <agent name="deep-dive-context-analyst" scenario="环境重构">环境因子重建与上下文预处理</agent>
+                        <agent name="deep-dive-structure-analyst" scenario="结构拓扑">状态机、数据流、轻量时序预扫描</agent>
+                        <agent name="deep-dive-race-and-isolation-analyst" scenario="时序+隔离">竞态、时序窗口、隔离推演与候选排序</agent>
+                        <agent name="deep-dive-arbiter" scenario="专项质疑+仲裁">先质疑后裁定，输出主根因与贡献因子</agent>
                         <agent name="defensive-fix-architect" scenario="防御性修复">状态机加固、竞态收敛和适度性修复设计</agent>
+                        <agent name="context-reconstructor" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                        <agent name="state-analyst" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                        <agent name="temporal-analyst" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                        <agent name="challenger" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                        <agent name="arbiter" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                    </agent-group>
+                    <agent-group name="ui-deep-dive" desc="UI Deep-Dive Agent（mobile-qa-workflow/ui-deep-dive/agents/）">
+                        <agent name="ui-context-analyst" scenario="UI 现场重建">视觉基线、环境与设备差异重建</agent>
+                        <agent name="ui-structure-analyst" scenario="布局拓扑">约束、层级、尺寸与资源链分析</agent>
+                        <agent name="ui-render-and-interaction-analyst" scenario="渲染与交互">重排、动画、手势与渲染时序分析</agent>
+                        <agent name="ui-deep-dive-arbiter" scenario="UI 裁定">聚合 UI 证据、输出最终专项结论</agent>
                     </agent-group>
                 </available-agents>
-                <example><![CDATA[<invoke-subagent subagent_type="investigator" subagent_prompt="
-                    <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
-                    <load target='mobile-qa-workflow/agents/investigator.md' prompt='加载角色定义'/>
-                    使用策略 {strategy_a} 执行 OVHSC 推理链，分析 {spec_file} 和 {context_bundle}
-                "/>]]></example>
             </tag>
             <tag name="workflow-status-routing">
                 <rules>
                     <rule>阶段文件可以基于证据和验证结果提出升级、回流或重入，但必须通过 workflow_status 显式回写状态字段表达</rule>
-                    <rule>涉及动态路由时，至少应回写 fanout_mode、reroute_reason、reroute_target_phase；需要计数保护时同步更新 rca_retry_count 或 fix_retry_count</rule>
+                    <rule>涉及动态路由时，至少应回写 fanout_mode、reroute_reason、reroute_target_phase；修复设计路由需补充 fix_strategy_mode 与 fix_risk_level；需要计数保护时同步更新 rca_retry_count 或 fix_retry_count</rule>
                     <rule>主编排器只识别 workflow_status 中的结构化字段，不采信阶段产物中的隐式文字描述作为重路由依据</rule>
                 </rules>
             </tag>
-            <tag name="goto">
-                <rule>跳转到指定步骤（用于回退和循环）</rule>
-                <params>
-                    <param name="step">目标步骤编号</param>
-                </params>
-            </tag>
-            <tag name="step-pause">
-                <rules>
-                    <rule>强制触发硬停顿，等待用户确认后才能继续</rule>
-                    <rule>将 title 和 option 输出在纯文本回复中</rule>
-                    <rule>输出后立即结束当前回复，未收到用户指令前禁止执行后续步骤</rule>
-                </rules>
-                <params>
-                    <param name="title">停顿标题</param>
-                    <param name="option">停顿选项</param>
-                </params>
-            </tag>
-            <tag name="ask">
-                <rule>向用户提问，必须使用封闭式/选择题形式，等待用户响应后继续</rule>
-                <params>
-                    <param name="questions">需要询问用户的问题</param>
-                </params>
-            </tag>
-            <tag name="try">
-                <rules>
-                    <rule>先执行 try 主流程，失败则重试最多 retry 次</rule>
-                    <rule>任一次成功立即结束，禁止执行 catch</rule>
-                    <rule>全部重试失败后才执行 catch</rule>
-                </rules>
-                <params>
-                    <param name="retry">重试次数，默认 1</param>
-                </params>
-            </tag>
-            <tag name="template-output">
-                <rule>按模板保存产物到工作区文件</rule>
-                <params>
-                    <param name="file">输出文件路径</param>
-                    <param name="template">模板文件路径</param>
-                </params>
-            </tag>
+            <tag name="goto"><rule>跳转到指定步骤（用于回退和循环）</rule><params><param name="step">目标步骤编号</param></params></tag>
+            <tag name="step-pause"><rules><rule>强制触发硬停顿，等待用户确认后才能继续</rule><rule>将 title 和 option 输出在纯文本回复中</rule><rule>输出后立即结束当前回复，未收到用户指令前禁止执行后续步骤</rule></rules><params><param name="title">停顿标题</param><param name="option">停顿选项</param></params></tag>
+            <tag name="ask"><rule>向用户提问，必须使用封闭式/选择题形式，等待用户响应后继续</rule><params><param name="questions">需要询问用户的问题</param></params></tag>
+            <tag name="try"><rules><rule>先执行 try 主流程，失败则重试最多 retry 次</rule><rule>任一次成功立即结束，禁止执行 catch</rule><rule>全部重试失败后才执行 catch</rule></rules><params><param name="retry">重试次数，默认 1</param></params></tag>
+            <tag name="template-output"><rule>按模板保存产物到工作区文件</rule><params><param name="file">输出文件路径</param><param name="template">模板文件路径</param></params></tag>
         </execution>
     </supported-tags>
 
@@ -173,7 +116,7 @@
         <trigger n="4">Spec 存在多种解读且影响修复方向</trigger>
         <trigger n="5">静态微验证超过 3 轮仍失败</trigger>
         <trigger n="6">Non-Bug 回流超过 2 次</trigger>
-        <trigger n="7">功能疑难专项子工作流置信度 &lt; 0.5 且无法进一步收敛</trigger>
+        <trigger n="7">专项子工作流置信度 &lt; 0.5 且无法进一步收敛</trigger>
         <output-format>
 ⚠️ [Human-Review Required]
 Issue: {issue_id}

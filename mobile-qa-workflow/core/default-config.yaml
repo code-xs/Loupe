@@ -1,46 +1,48 @@
 # Mobile QA Workflow — 问题工作区默认配置
 # 每个 Issue 在 qa-workspace/{issue_id}/ 下创建一份副本
 
-# 基本信息（Phase 1 填写）
 issue_id: null
 workspace_name: null
 platform: null
 priority: null
 
-# 产物路径（自动填充）
 output_issue_card: null
 output_spec: null
 output_context_bundle: null
 output_rca_report: null
 output_fix_design: null
 output_impl_report: null
-output_contract_checklist: null    # V3 新增：契约溯源检查清单
-output_error_dump: null            # V3 新增：纠错失败现场转储
+output_contract_checklist: null
+output_error_dump: null
 output_verification_report: null
 output_knowledge_card: null
 
-# 专项子工作流产物路径（Deep-Dive 自动填充）
 output_environment_factor_report: null
 output_topology_report: null
 output_concurrency_report: null
 output_deep_dive_rca: null
 output_deep_dive_summary: null
 output_defensive_fix_design: null
+output_ui_deep_dive_rca: null
+output_ui_deep_dive_summary: null
 
-# 环境能力检测（workflow 初始化时填写）
 env_file_system: true
 env_git: true
 env_lint_tools: true
 env_subagent: true
-routing_policy_version: "a0"
-active_fanout_policy: null
+routing_policy_version: "abc-1"
+active_fanout_policy: "dynamic-p3-p4"
+active_fix_strategy_policy: "risk-and-confidence"
 output_runtime_compat_report: null
 output_reroute_trace: null
 
-# Git 分支信息（Phase 5 填写）
+deep_dive_optional_artifacts:
+  environment_factor_report: true
+  deep_dive_topology: true
+  concurrency_analysis_report: true
+
 fix_branch: null
 
-# 研发侧上下文（Phase 1 选填，与 issue-card「代码与文档上下文」一致）
 repo_path: null
 repo_branch: null
 code_patch: null

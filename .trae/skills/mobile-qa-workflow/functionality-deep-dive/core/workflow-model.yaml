@@ -1,7 +1,0 @@
-# Functionality Deep-Dive Workflow - Stage Sequence
-workflow_step:
-- 1. f1-context-reconstruction
-- 2. f2-state-topology
-- 3. f3-temporal-correlation
-- 4. f4-isolation-debate
-- 5. f5-defensive-fix-design

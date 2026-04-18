@@ -1,17 +1,19 @@
-# Case Metadata — case-007-network-timeout
-# Schema: eval-framework/case-schema.yaml
-
-case_id: "case-007-network-timeout"
-title: "首页 Feed 流加载超时导致白屏 10 秒以上"
-category: "性能"
-complexity: "Medium"
-platform: "Both"
-intermittent: "高概率偶发"
-info_completeness: "日志充分"
-expected_route: "standard-rca"
+case_id: case-007-network-timeout
+title: 首页 Feed 流加载超时导致白屏 10 秒以上
+category: 性能
+complexity: Medium
+platform: Both
+intermittent: 高概率偶发
+info_completeness: 日志充分
+expected_route: standard-rca
 tags:
-  - "performance"
-  - "network"
-  - "timeout"
-  - "feed"
-  - "cold-start"
+- performance
+- network
+- timeout
+- feed
+- cold-start
+- fanout:medium-challenge
+- fix:challenged-proposer
+- route:standard-rca
+expected_fanout_mode: medium-challenge
+expected_fix_mode: challenged-proposer

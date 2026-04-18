@@ -1,16 +1,18 @@
-# Case Metadata — case-008-memory-leak
-# Schema: eval-framework/case-schema.yaml
-
-case_id: "case-008-memory-leak"
-title: "直播间 Closure 循环引用导致内存泄漏"
-category: "性能"
-complexity: "Medium"
-platform: "iOS"
-intermittent: "必现"
-info_completeness: "日志充分"
-expected_route: "standard-rca"
+case_id: case-008-memory-leak
+title: 直播间 Closure 循环引用导致内存泄漏
+category: 性能
+complexity: Medium
+platform: iOS
+intermittent: 必现
+info_completeness: 日志充分
+expected_route: standard-rca
 tags:
-  - "memory-leak"
-  - "retain-cycle"
-  - "closure"
-  - "live-streaming"
+- memory-leak
+- retain-cycle
+- closure
+- live-streaming
+- fanout:medium-challenge
+- fix:challenged-proposer
+- route:standard-rca
+expected_fanout_mode: medium-challenge
+expected_fix_mode: challenged-proposer

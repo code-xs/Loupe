@@ -1,22 +1,19 @@
-# Eval Framework 默认配置
-# 控制评估运行的全局参数
-
 runner_config:
   loupe_model: claude-sonnet-4-20250514
   baseline_model: claude-sonnet-4-20250514
   judge_model: claude-opus-4-20250514
   temperature: 0.1
   max_retries: 2
-  timeout_per_phase: 300       # 单阶段超时（秒）
-  timeout_per_case: 1800       # 单 Case 超时（秒）
-  parallel_sessions: 1         # V1 串行模式
+  timeout_per_phase: 300
+  timeout_per_case: 1800
+  parallel_sessions: 1
 
 parallel_config:
   max_sessions: 4
   session_memory_limit: "2GB"
   chain_parallel: true
   case_parallel: true
-  scheduling_strategy: "chain_first"  # chain_first | case_first | round_robin
+  scheduling_strategy: "chain_first"
 
 execution_profiles:
   pr_quick:
@@ -46,24 +43,19 @@ chain_definitions:
     executor: "ide_session"
     skill: "mobile-qa-workflow"
     mode: "standard"
-    description: "使用 Loupe 标准工作流执行 RCA"
   B:
-    name: "专家模式（Functionality Deep-Dive）"
+    name: "专家模式（Functionality/UI Deep-Dive）"
     executor: "ide_session"
     skill: "mobile-qa-workflow"
     mode: "expert"
-    description: "强制触发 Functionality Deep-Dive 子工作流"
   C:
     name: "外部 B2C 方案"
     executor: "manual_input"
-    description: "人工录入外部工具（如 ChatGPT/Gemini）结果"
   D:
     name: "LLM 裸跑基线"
     executor: "baseline_runner"
     model: "claude-sonnet-4-20250514"
-    description: "不使用任何工作流编排，LLM 单次分析"
 
-# 结果输出配置
 output_config:
   results_dir: "eval-results/"
   baseline_dir: "eval-results/baseline-latest/"
@@ -71,11 +63,14 @@ output_config:
   log_level: "INFO"
   save_session_logs: true
 
-# IDE 会话配置
+efficiency_tracking:
+  enabled: true
+  metrics: [avg_agent_count, score_per_agent, deep_dive_activation_rate, expected_route_hit_rate, expected_fanout_hit_rate]
+
 ide_config:
-  adapter: "trae"              # trae | cursor | extension_api
+  adapter: "trae"
   headless: true
   skill_path: "mobile-qa-workflow"
   auto_reply_config: "eval-framework/auto-reply-rules.yaml"
-  graceful_shutdown_timeout: 10  # 秒
-  health_check_interval: 30      # 秒
+  graceful_shutdown_timeout: 10
+  health_check_interval: 30

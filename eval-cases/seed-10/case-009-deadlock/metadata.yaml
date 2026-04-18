@@ -1,17 +1,19 @@
-# Case Metadata — case-009-deadlock
-# Schema: eval-framework/case-schema.yaml
-
-case_id: "case-009-deadlock"
-title: "数据库读写锁与 UI 线程同步回调导致死锁"
-category: "竞态"
-complexity: "Complex"
-platform: "Android"
-intermittent: "极低概率偶发"
-info_completeness: "日志残缺"
-expected_route: "functionality-deep-dive"
+case_id: case-009-deadlock
+title: 数据库读写锁与 UI 线程同步回调导致死锁
+category: 竞态
+complexity: Complex
+platform: Android
+intermittent: 极低概率偶发
+info_completeness: 日志残缺
+expected_route: functionality-deep-dive
 tags:
-  - "deadlock"
-  - "database"
-  - "lock"
-  - "main-thread"
-  - "ANR"
+- deadlock
+- database
+- lock
+- main-thread
+- ANR
+- fanout:complex-arbitrated
+- fix:contested-arbitrated
+- route:functionality-deep-dive
+expected_fanout_mode: complex-arbitrated
+expected_fix_mode: contested-arbitrated

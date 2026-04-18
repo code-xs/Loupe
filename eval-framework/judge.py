@@ -1,11 +1,5 @@
 """
 Loupe AI 自检自测系统 — LLM-as-Judge (评分核心)
-使用独立高能力模型 (Claude Opus) 对链路输出进行盲评。
-设计要点:
-- 在干净上下文中工作，读取静态产物文件
-- Judge 不得看到 Chain 标识（盲评）
-- 每次评分独立上下文（无跨 Case 记忆）
-- 9 维度评估 (V3.1): 原 6 维度 + contract_first_pass_accuracy / hallucination_interception / self_healing_rate
 """
 
 import os
@@ -20,31 +14,26 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-# ─── Data Models ────────────────────────────────────────────────
-
 @dataclass
 class EvalResult:
-    """单条链路评估结果"""
     case_id: str = ""
     chain: str = ""
-    scores: dict = field(default_factory=dict)       # 维度 → 分数
-    weighted_score: float = 0.0                      # 加权综合分
-    reasoning: dict = field(default_factory=dict)    # 维度 → 评分理由
-    stage_scores: dict = field(default_factory=dict) # 阶段级拆分 (F1-F5 / P1-P6)
+    scores: dict = field(default_factory=dict)
+    weighted_score: float = 0.0
+    reasoning: dict = field(default_factory=dict)
+    stage_scores: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
 
 
 @dataclass
 class ChainOutput:
-    """链路输出产物集合"""
     output_dir: str = ""
     chain: str = ""
-    artifacts: dict = field(default_factory=dict)  # filename → content
+    artifacts: dict = field(default_factory=dict)
 
 
 @dataclass
 class CaseData:
-    """Case 数据 (含 ground-truth)"""
     case_id: str = ""
     input_dir: str = ""
     ground_truth_dir: str = ""
@@ -55,18 +44,7 @@ class CaseData:
     scoring_rubric: dict = field(default_factory=dict)
 
 
-# ─── Judge Prompts ──────────────────────────────────────────────
-
-JUDGE_SYSTEM_PROMPT = """你是一位资深的移动端质量评估专家。你的任务是对一个问题分析系统的输出进行盲评。
-
-评估规则:
-1. 你不知道这个输出来自哪个系统或链路
-2. 每个维度独立评分，0-10 分
-3. 必须给出具体的评分理由
-4. 对比 Ground Truth 进行客观评估
-5. 不因输出篇幅长短而加分或减分，只看质量
-
-请严格按照 JSON 格式输出评分结果。"""
+JUDGE_SYSTEM_PROMPT = """你是一位资深的移动端质量评估专家。你的任务是对一个问题分析系统的输出进行盲评。"""
 
 JUDGE_EVAL_PROMPT = """## 评估任务
 
@@ -91,10 +69,9 @@ JUDGE_EVAL_PROMPT = """## 评估任务
 
 #### 1. 归因准确率 (attribution_accuracy) — 权重 {w_attribution}
 - 10分: 主根因精确匹配 Ground Truth
-- 7分: 部分匹配（识别了正确方向但不够精确）
-- 4分: 仅识别了贡献因子，未找到主根因
+- 7分: 部分匹配
+- 4分: 仅识别了贡献因子
 - 0分: 完全未命中
-- -2分: 给出了错误的根因（false positive，从 0 分中扣减）
 
 #### 2. 贡献因子完整性 (contributing_completeness) — 权重 {w_contributing}
 - 10分: 识别了所有关键贡献因子
@@ -121,31 +98,14 @@ JUDGE_EVAL_PROMPT = """## 评估任务
 - 0分: 产物严重不完整
 
 #### 6. 防御性修复质量 (defensive_fix_quality) — 权重 {w_defensive}
-- 10分: 充分考虑架构鲁棒性，包含熔断/断言/守卫等防御措施
+- 10分: 充分考虑架构鲁棒性
 - 7分: 有部分防御性考虑
-- 4分: 仅修复直接问题，无防御考虑
+- 4分: 仅修复直接问题
 - 0分: 修复方案可能引入新风险
 
 #### 7. 契约溯源首次通过准确率 (contract_first_pass_accuracy) — 权重 {w_contract}
-- 10分: 所有跨模块引用首轮溯源全部匹配，无需修正
-- 7分: 首轮溯源 ≥80% 匹配，少量修正后全部通过
-- 4分: 首轮溯源 50-80% 匹配，需多轮修正
-- 0分: 首轮溯源 <50% 匹配或未执行溯源
-数据来源: contract-checklist.md 中匹配状态统计
-
 #### 8. 幻觉拦截率 (hallucination_interception) — 权重 {w_hallucination}
-- 10分: 溯源过程中发现并修正了所有臆测引用（或无臆测发生）
-- 7分: 拦截了大部分臆测引用，少量漏网
-- 4分: 仅拦截了部分臆测引用
-- 0分: 未执行溯源或臆测引用未被拦截
-数据来源: contract-checklist.md 中不匹配项 + impl-report 纠错记录
-
 #### 9. 自愈修复率 (self_healing_rate) — 权重 {w_self_healing}
-- 10分: 编码一次通过无需纠错，或所有纠错均在 3 轮内成功
-- 7分: 纠错成功但消耗了 2-3 轮
-- 4分: 部分纠错成功，部分失败触发 Human-Review
-- 0分: 纠错全部失败，全量触发 Human-Review
-数据来源: impl-report 微验证纠错记录 + Execution-Status
 
 请输出严格 JSON 格式:
 ```json
@@ -184,16 +144,8 @@ JUDGE_EVAL_PROMPT = """## 评估任务
 ```"""
 
 
-# ─── LLM Judge ──────────────────────────────────────────────────
-
 class LLMJudge:
-    """
-    LLM-as-Judge 评分核心
-    """
-
-    def __init__(self, model: str = "claude-opus-4-20250514",
-                 rubric_path: str = "eval-framework/scoring-rubric-base.yaml",
-                 api_key: Optional[str] = None):
+    def __init__(self, model: str = "claude-opus-4-20250514", rubric_path: str = "eval-framework/scoring-rubric-base.yaml", api_key: Optional[str] = None):
         self.model = model
         self.rubric = self._load_rubric(rubric_path)
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
@@ -212,32 +164,16 @@ class LLMJudge:
     @staticmethod
     def _load_rubric(path: str) -> dict:
         if not os.path.exists(path):
-            logger.warning(f"Rubric not found: {path}")
             return {}
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
-    def evaluate(self, case: CaseData,
-                 chain_output: ChainOutput) -> EvalResult:
-        """
-        评估单条链路输出
-
-        Args:
-            case: Case 数据 (含 ground-truth)
-            chain_output: 链路产物
-
-        Returns:
-            EvalResult
-        """
-        # 构建评估输入（盲评：不包含 chain 标识）
-        analysis_text = self._collect_analysis_text(chain_output)
-
-        # 构建 prompt
+    def evaluate(self, case: CaseData, chain_output: ChainOutput) -> EvalResult:
         prompt = JUDGE_EVAL_PROMPT.format(
             expected_root_cause=case.expected_root_cause,
             expected_contributing=case.expected_contributing,
             expected_fix_direction=case.expected_fix_direction,
-            analysis_output=analysis_text,
+            analysis_output=self._collect_analysis_text(chain_output),
             w_attribution=self.weights.get("attribution_accuracy", 0.30),
             w_contributing=self.weights.get("contributing_completeness", 0.12),
             w_fix=self.weights.get("fix_correctness", 0.18),
@@ -248,53 +184,28 @@ class LLMJudge:
             w_hallucination=self.weights.get("hallucination_interception", 0.04),
             w_self_healing=self.weights.get("self_healing_rate", 0.03),
         )
-
-        # 调用 LLM
         raw_response = self._call_judge(prompt)
-
-        # 解析结果
         result = self._parse_judge_response(raw_response)
         result.case_id = case.case_id
         result.chain = chain_output.chain
-
-        # 计算加权综合分
         result.weighted_score = self._compute_weighted_score(result.scores)
-
-        # 应用 Case 特定评分调整
+        runtime_metrics = self._collect_runtime_metrics(chain_output.output_dir)
+        result.metadata = {**case.metadata, "runtime_metrics": runtime_metrics}
         if case.scoring_rubric:
             result = self._apply_rubric_overrides(result, case.scoring_rubric)
-
         return result
 
     def batch_evaluate(self, items: list[tuple]) -> list[EvalResult]:
-        """
-        批量评估
-
-        Args:
-            items: (CaseData, ChainOutput) 元组列表
-
-        Returns:
-            EvalResult 列表
-        """
         results = []
         for case, chain_output in items:
             try:
-                result = self.evaluate(case, chain_output)
-                results.append(result)
+                results.append(self.evaluate(case, chain_output))
             except Exception as e:
-                logger.error(f"Evaluation failed for {case.case_id}: {e}")
-                results.append(EvalResult(
-                    case_id=case.case_id,
-                    chain=chain_output.chain,
-                    metadata={"error": str(e)},
-                ))
+                logger.error("Evaluation failed for %s: %s", case.case_id, e)
+                results.append(EvalResult(case_id=case.case_id, chain=chain_output.chain, metadata={"error": str(e)}))
         return results
 
     def _collect_analysis_text(self, chain_output: ChainOutput) -> str:
-        """收集链路产物为文本（盲评模式：不暴露 chain 标识）"""
-        output_dir = chain_output.output_dir
-
-        # 按优先级收集文件
         priority_files = [
             "rca-report.md",
             "fix-design.md",
@@ -302,39 +213,34 @@ class LLMJudge:
             "issue-card.md",
             "impl-report.md",
             "verification-report.md",
-            "contract-checklist.md",       # V3.1 新增
-            "error-dump.md",               # V3.1 新增
+            "contract-checklist.md",
+            "error-dump.md",
             "deep-dive/deep-dive-summary.md",
             "deep-dive/functionality-deep-dive-rca.md",
             "deep-dive/defensive-fix-design.md",
-            "baseline-output.md",  # Chain D
+            "ui-deep-dive/ui-deep-dive-summary.md",
+            "ui-deep-dive/ui-deep-dive-rca.md",
+            "baseline-output.md",
         ]
-
         parts = []
         for fname in priority_files:
-            fpath = os.path.join(output_dir, fname)
+            fpath = os.path.join(chain_output.output_dir, fname)
             if os.path.exists(fpath):
                 try:
-                    with open(fpath, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    # 移除可能暴露 Chain 的信息
-                    content = self._redact_chain_info(content)
-                    parts.append(f"--- {fname} ---\n{content}\n")
+                    content = Path(fpath).read_text(encoding="utf-8")
                 except Exception:
                     continue
-
+                parts.append(f"--- {fname} ---\n{self._redact_chain_info(content)}\n")
         return "\n".join(parts) if parts else "[无产物]"
 
     @staticmethod
     def _redact_chain_info(text: str) -> str:
-        """移除可能暴露 Chain 标识的信息"""
         import re
         text = re.sub(r"Chain\s*[ABCD]", "Chain [REDACTED]", text, flags=re.IGNORECASE)
         text = re.sub(r"chain_mode:\s*(standard|expert)", "chain_mode: [REDACTED]", text)
         return text
 
     def _call_judge(self, prompt: str) -> str:
-        """调用 Judge LLM"""
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=self.api_key)
@@ -347,12 +253,10 @@ class LLMJudge:
             )
             return message.content[0].text
         except ImportError:
-            logger.warning("anthropic not installed, using placeholder scores")
             return self._placeholder_response()
 
     @staticmethod
     def _placeholder_response() -> str:
-        """占位符评分（测试用）"""
         return json.dumps({
             "scores": {
                 "attribution_accuracy": 5.0,
@@ -366,7 +270,7 @@ class LLMJudge:
                 "self_healing_rate": 5.0,
             },
             "reasoning": {
-                "attribution_accuracy": "[占位 - 需要真实 Judge LLM]",
+                "attribution_accuracy": "[占位]",
                 "contributing_completeness": "[占位]",
                 "fix_correctness": "[占位]",
                 "reasoning_depth": "[占位]",
@@ -387,17 +291,10 @@ class LLMJudge:
         })
 
     def _parse_judge_response(self, raw: str) -> EvalResult:
-        """解析 Judge LLM 输出"""
         result = EvalResult()
-
-        # 提取 JSON 块
         import re
         json_match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
-        if json_match:
-            raw_json = json_match.group(1)
-        else:
-            raw_json = raw
-
+        raw_json = json_match.group(1) if json_match else raw
         try:
             data = json.loads(raw_json)
             result.scores = data.get("scores", {})
@@ -405,169 +302,156 @@ class LLMJudge:
             result.stage_scores = data.get("stage_scores", {})
             result.metadata["overall_comment"] = data.get("overall_comment", "")
         except json.JSONDecodeError:
-            logger.warning("Failed to parse Judge JSON, attempting line-by-line")
             result.scores = self._fallback_parse(raw)
-
         return result
 
     @staticmethod
     def _fallback_parse(text: str) -> dict:
-        """后备解析：从文本中提取分数"""
         import re
         scores = {}
         patterns = {
-            "attribution_accuracy": r"attribution_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "contributing_completeness": r"contributing_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "fix_correctness": r"fix_correctness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "reasoning_depth": r"reasoning_depth[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "artifact_completeness": r"artifact_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "defensive_fix_quality": r"defensive_fix_quality[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            # V3.1 新增 3 维度
-            "contract_first_pass_accuracy": r"contract_first_pass_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "hallucination_interception": r"hallucination_interception[\"']?\s*:\s*(\d+(?:\.\d+)?)",
-            "self_healing_rate": r"self_healing_rate[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+            "attribution_accuracy": r'attribution_accuracy["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "contributing_completeness": r'contributing_completeness["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "fix_correctness": r'fix_correctness["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "reasoning_depth": r'reasoning_depth["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "artifact_completeness": r'artifact_completeness["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "defensive_fix_quality": r'defensive_fix_quality["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "contract_first_pass_accuracy": r'contract_first_pass_accuracy["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "hallucination_interception": r'hallucination_interception["\']?\s*:\s*(\d+(?:\.\d+)?)',
+            "self_healing_rate": r'self_healing_rate["\']?\s*:\s*(\d+(?:\.\d+)?)',
         }
         for key, pattern in patterns.items():
             match = re.search(pattern, text)
-            if match:
-                scores[key] = float(match.group(1))
-            else:
-                scores[key] = 0.0
+            scores[key] = float(match.group(1)) if match else 0.0
         return scores
 
     def _compute_weighted_score(self, scores: dict) -> float:
-        """计算加权综合分"""
-        total = 0.0
-        for dim, weight in self.weights.items():
-            total += scores.get(dim, 0.0) * weight
-        return round(total, 3)
+        return round(sum(scores.get(dim, 0.0) * weight for dim, weight in self.weights.items()), 3)
 
     @staticmethod
-    def _apply_rubric_overrides(result: EvalResult,
-                                rubric: dict) -> EvalResult:
-        """应用 Case 特定的评分权重覆盖"""
-        # 权重覆盖
+    def _apply_rubric_overrides(result: EvalResult, rubric: dict) -> EvalResult:
         overrides = {
             "attribution_weight_override": "attribution_accuracy",
             "contributing_weight_override": "contributing_completeness",
             "fix_weight_override": "fix_correctness",
         }
-        custom_weights = {}
-        for override_key, dim_key in overrides.items():
-            val = rubric.get(override_key)
-            if val is not None:
-                custom_weights[dim_key] = val
-
-        if custom_weights:
-            # 用自定义权重重算
-            total = 0.0
-            default_weights = {
-                "attribution_accuracy": 0.30,
-                "contributing_completeness": 0.12,
-                "fix_correctness": 0.18,
-                "reasoning_depth": 0.08,
-                "artifact_completeness": 0.09,
-                "defensive_fix_quality": 0.08,
-                "contract_first_pass_accuracy": 0.08,
-                "hallucination_interception": 0.04,
-                "self_healing_rate": 0.03,
-            }
-            weights = {**default_weights, **custom_weights}
-            for dim, weight in weights.items():
-                total += result.scores.get(dim, 0.0) * weight
-            result.weighted_score = round(total, 3)
-
+        default_weights = {
+            "attribution_accuracy": 0.30,
+            "contributing_completeness": 0.12,
+            "fix_correctness": 0.18,
+            "reasoning_depth": 0.08,
+            "artifact_completeness": 0.09,
+            "defensive_fix_quality": 0.08,
+            "contract_first_pass_accuracy": 0.08,
+            "hallucination_interception": 0.04,
+            "self_healing_rate": 0.03,
+        }
+        custom = {dim: rubric[key] for key, dim in overrides.items() if rubric.get(key) is not None}
+        if custom:
+            weights = {**default_weights, **custom}
+            result.weighted_score = round(sum(result.scores.get(dim, 0.0) * weight for dim, weight in weights.items()), 3)
         return result
 
     @staticmethod
+    def _collect_runtime_metrics(output_dir: str) -> dict:
+        status_path = Path(output_dir) / "workflow-status.yaml"
+        if not status_path.exists():
+            return {}
+        try:
+            status = yaml.safe_load(status_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return {}
+        specialized = status.get("specialized_workflow", {}) or {}
+        return {
+            "analysis_complexity": status.get("analysis_complexity"),
+            "fanout_mode": status.get("fanout_mode"),
+            "fix_strategy_mode": status.get("fix_strategy_mode"),
+            "specialized_workflow_mode": specialized.get("mode"),
+            "specialized_workflow_status": specialized.get("status"),
+            "agent_count": LLMJudge._estimate_agent_count(status.get("fanout_mode"), status.get("fix_strategy_mode"), specialized.get("mode")),
+        }
+
+    @staticmethod
+    def _estimate_agent_count(fanout_mode: Optional[str], fix_strategy_mode: Optional[str], specialized_mode: Optional[str]) -> int:
+        mapping = {
+            "simple-single": 1,
+            "medium-challenge": 2,
+            "complex-arbitrated": 4,
+            "single-proposer": 1,
+            "challenged-proposer": 2,
+            "contested-arbitrated": 4,
+        }
+        total = 0
+        if fanout_mode:
+            total += mapping.get(fanout_mode, 0)
+        if fix_strategy_mode:
+            total += mapping.get(fix_strategy_mode, 0)
+        if specialized_mode == "functionality-deep-dive":
+            total += 4
+        elif specialized_mode == "ui-deep-dive":
+            total += 3
+        return total
+
+    @staticmethod
     def load_case_data(case_dir: str) -> CaseData:
-        """从 Case 目录加载完整数据"""
         case_path = Path(case_dir)
-
         def read_file(path: Path) -> str:
-            if path.exists():
-                return path.read_text(encoding="utf-8")
-            return ""
-
+            return path.read_text(encoding="utf-8") if path.exists() else ""
         metadata = {}
         meta_path = case_path / "metadata.yaml"
         if meta_path.exists():
             with open(meta_path, "r", encoding="utf-8") as f:
                 metadata = yaml.safe_load(f) or {}
-
-        gt_dir = case_path / "ground-truth"
         rubric = {}
-        rubric_path = gt_dir / "scoring-rubric.yaml"
+        rubric_path = case_path / "ground-truth" / "scoring-rubric.yaml"
         if rubric_path.exists():
             with open(rubric_path, "r", encoding="utf-8") as f:
                 rubric = yaml.safe_load(f) or {}
-
         return CaseData(
             case_id=metadata.get("case_id", case_path.name),
             input_dir=str(case_path / "input"),
-            ground_truth_dir=str(gt_dir),
+            ground_truth_dir=str(case_path / "ground-truth"),
             metadata=metadata,
-            expected_root_cause=read_file(gt_dir / "expected-root-cause.md"),
-            expected_contributing=read_file(gt_dir / "expected-contributing.md"),
-            expected_fix_direction=read_file(gt_dir / "expected-fix-direction.md"),
+            expected_root_cause=read_file(case_path / "ground-truth" / "expected-root-cause.md"),
+            expected_contributing=read_file(case_path / "ground-truth" / "expected-contributing.md"),
+            expected_fix_direction=read_file(case_path / "ground-truth" / "expected-fix-direction.md"),
             scoring_rubric=rubric,
         )
 
     @staticmethod
     def load_chain_output(output_dir: str, chain: str = "") -> ChainOutput:
-        """加载链路输出产物"""
         return ChainOutput(output_dir=output_dir, chain=chain)
 
 
-# ─── CLI Entry Point ────────────────────────────────────────────
-
 def main():
     import argparse
-
     parser = argparse.ArgumentParser(description="Loupe Eval Judge")
-    parser.add_argument("--results", required=True, help="Results directory")
+    parser.add_argument("--results", required=True)
     parser.add_argument("--rubric", default="eval-framework/scoring-rubric-base.yaml")
     parser.add_argument("--cases", default="eval-cases/")
     parser.add_argument("--model", default="claude-opus-4-20250514")
-    parser.add_argument("--output", default=None, help="Output JSON path")
-
+    parser.add_argument("--output", default=None)
     args = parser.parse_args()
-
     logging.basicConfig(level=logging.INFO)
-
     judge = LLMJudge(model=args.model, rubric_path=args.rubric)
-
     results_path = Path(args.results)
     cases_path = Path(args.cases)
-
     all_results = []
-
-    # 遍历结果目录
     for case_dir in sorted(results_path.iterdir()):
         if not case_dir.is_dir():
             continue
         case_id = case_dir.name
-
-        # 查找对应 Case 数据
         matching_cases = list(cases_path.rglob(f"*{case_id}*"))
         case_data_dir = matching_cases[0] if matching_cases else None
-
         if not case_data_dir:
-            logger.warning(f"No case data found for {case_id}")
             continue
-
         case_data = LLMJudge.load_case_data(str(case_data_dir))
-
-        # 评估每个 Chain
         for chain_dir in sorted(case_dir.iterdir()):
             if not chain_dir.is_dir():
                 continue
             chain = chain_dir.name.replace("chain-", "")
-            chain_output = LLMJudge.load_chain_output(str(chain_dir), chain)
-            result = judge.evaluate(case_data, chain_output)
+            result = judge.evaluate(case_data, LLMJudge.load_chain_output(str(chain_dir), chain))
             all_results.append(result)
-
-    # 输出
     output_data = [{
         "case_id": r.case_id,
         "chain": r.chain,
@@ -575,13 +459,12 @@ def main():
         "scores": r.scores,
         "reasoning": r.reasoning,
         "stage_scores": r.stage_scores,
+        "metadata": r.metadata,
     } for r in all_results]
-
     output_path = args.output or str(results_path / "judge-results.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
-
-    print(f"Evaluation complete: {len(all_results)} results → {output_path}")
+    print(f"Evaluation complete: {len(all_results)} results -> {output_path}")
 
 
 if __name__ == "__main__":

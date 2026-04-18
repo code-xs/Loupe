@@ -1,17 +1,10 @@
-"""
-Loupe AI 自检自测系统 — Scoring Engine (评分计算引擎)
-负责评分维度计算、加权汇总、统计分析。
-支持阶段级拆分评分 (F1-F5 / P1-P6) 和 Case 分组统计。
-
-V3.1: 扩展至 9 维度 + 权重总和断言
-"""
+"""Loupe AI 自检自测系统 — Scoring Engine (评分计算引擎)"""
 
 import json
 import logging
 import statistics
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -20,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DimensionStats:
-    """单维度统计"""
     dimension: str = ""
     mean: float = 0.0
     median: float = 0.0
@@ -32,7 +24,6 @@ class DimensionStats:
 
 @dataclass
 class ChainStats:
-    """单链路统计"""
     chain: str = ""
     weighted_mean: float = 0.0
     dimension_stats: dict = field(default_factory=dict)
@@ -42,18 +33,14 @@ class ChainStats:
 
 @dataclass
 class ScoringReport:
-    """评分报告"""
-    chain_stats: dict = field(default_factory=dict)   # chain → ChainStats
-    category_stats: dict = field(default_factory=dict) # category → {chain → stats}
+    chain_stats: dict = field(default_factory=dict)
+    category_stats: dict = field(default_factory=dict)
     complexity_stats: dict = field(default_factory=dict)
+    efficiency_metrics: dict = field(default_factory=dict)
     overall_stats: dict = field(default_factory=dict)
 
 
 class ScoringEngine:
-    """
-    评分维度计算与加权汇总引擎
-    """
-
     DIMENSIONS = [
         "attribution_accuracy",
         "contributing_completeness",
@@ -61,12 +48,10 @@ class ScoringEngine:
         "reasoning_depth",
         "artifact_completeness",
         "defensive_fix_quality",
-        # V3.1 新增 3 维度
         "contract_first_pass_accuracy",
         "hallucination_interception",
         "self_healing_rate",
     ]
-
     STAGES = [
         "F1_context_reconstruction",
         "F2_state_topology",
@@ -88,9 +73,7 @@ class ScoringEngine:
             "hallucination_interception": 0.04,
             "self_healing_rate": 0.03,
         })
-        # V3.1: 权重总和断言
-        assert abs(sum(self.weights.values()) - 1.0) < 1e-6, \
-            f"Weights sum to {sum(self.weights.values())}, expected 1.0"
+        assert abs(sum(self.weights.values()) - 1.0) < 1e-6
 
     @staticmethod
     def _load_rubric(path: str) -> dict:
@@ -99,72 +82,36 @@ class ScoringEngine:
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
-    def compute_report(self, eval_results: list[dict],
-                       case_metadata: dict = None) -> ScoringReport:
-        """
-        从评分结果计算完整报告
-
-        Args:
-            eval_results: Judge 输出的评分结果列表
-            case_metadata: case_id → metadata 映射
-
-        Returns:
-            ScoringReport
-        """
+    def compute_report(self, eval_results: list[dict], case_metadata: dict = None) -> ScoringReport:
         report = ScoringReport()
         case_metadata = case_metadata or {}
-
-        # 按 Chain 分组
-        by_chain: dict[str, list[dict]] = {}
+        by_chain = {}
         for r in eval_results:
-            chain = r.get("chain", "unknown")
-            by_chain.setdefault(chain, []).append(r)
-
-        # 计算每个 Chain 的统计
+            by_chain.setdefault(r.get("chain", "unknown"), []).append(r)
         for chain, results in by_chain.items():
             report.chain_stats[chain] = self._compute_chain_stats(chain, results)
-
-        # 按类别分组统计
         if case_metadata:
-            report.category_stats = self._compute_category_stats(
-                eval_results, case_metadata
-            )
-            report.complexity_stats = self._compute_complexity_stats(
-                eval_results, case_metadata
-            )
-
-        # 全局统计
+            report.category_stats = self._compute_category_stats(eval_results, case_metadata)
+            report.complexity_stats = self._compute_complexity_stats(eval_results, case_metadata)
+        report.efficiency_metrics = self._compute_efficiency_metrics(eval_results)
         report.overall_stats = self._compute_overall_stats(eval_results)
-
         return report
 
-    def _compute_chain_stats(self, chain: str,
-                             results: list[dict]) -> ChainStats:
-        """计算单链路统计"""
+    def _compute_chain_stats(self, chain: str, results: list[dict]) -> ChainStats:
         stats = ChainStats(chain=chain, case_count=len(results))
-
-        # 综合分统计
         weighted_scores = [r.get("weighted_score", 0.0) for r in results]
-        stats.weighted_mean = (
-            statistics.mean(weighted_scores) if weighted_scores else 0.0
-        )
-
-        # 各维度统计
+        stats.weighted_mean = statistics.mean(weighted_scores) if weighted_scores else 0.0
         for dim in self.DIMENSIONS:
             scores = [r.get("scores", {}).get(dim, 0.0) for r in results]
             stats.dimension_stats[dim] = self._calc_stats(dim, scores)
-
-        # 阶段级统计
         for stage in self.STAGES:
             scores = [r.get("stage_scores", {}).get(stage, 0.0) for r in results]
             if any(s > 0 for s in scores):
                 stats.stage_stats[stage] = self._calc_stats(stage, scores)
-
         return stats
 
     @staticmethod
     def _calc_stats(name: str, scores: list[float]) -> DimensionStats:
-        """计算描述性统计"""
         valid = [s for s in scores if s is not None]
         if not valid:
             return DimensionStats(dimension=name)
@@ -178,99 +125,78 @@ class ScoringEngine:
             count=len(valid),
         )
 
-    def _compute_category_stats(self, results: list[dict],
-                                 case_metadata: dict) -> dict:
-        """按问题分类计算统计"""
-        by_category: dict[str, dict[str, list]] = {}
-
+    def _compute_category_stats(self, results: list[dict], case_metadata: dict) -> dict:
+        by_category = {}
         for r in results:
-            case_id = r.get("case_id", "")
-            meta = case_metadata.get(case_id, {})
+            meta = case_metadata.get(r.get("case_id", ""), {})
             category = meta.get("category", "unknown")
-            chain = r.get("chain", "")
-            by_category.setdefault(category, {}).setdefault(chain, []).append(r)
+            by_category.setdefault(category, {}).setdefault(r.get("chain", ""), []).append(r.get("weighted_score", 0.0))
+        return {cat: {chain: {"mean": round(statistics.mean(scores), 3) if scores else 0, "count": len(scores)} for chain, scores in chain_results.items()} for cat, chain_results in by_category.items()}
 
-        stats = {}
-        for cat, chain_results in by_category.items():
-            stats[cat] = {}
-            for chain, results_list in chain_results.items():
-                scores = [r.get("weighted_score", 0.0) for r in results_list]
-                stats[cat][chain] = {
-                    "mean": round(statistics.mean(scores), 3) if scores else 0,
-                    "count": len(scores),
-                }
-        return stats
-
-    def _compute_complexity_stats(self, results: list[dict],
-                                   case_metadata: dict) -> dict:
-        """按复杂度等级计算统计"""
-        by_complexity: dict[str, dict[str, list]] = {}
-
+    def _compute_complexity_stats(self, results: list[dict], case_metadata: dict) -> dict:
+        by_complexity = {}
         for r in results:
-            case_id = r.get("case_id", "")
-            meta = case_metadata.get(case_id, {})
+            meta = case_metadata.get(r.get("case_id", ""), {})
             complexity = meta.get("complexity", "unknown")
-            chain = r.get("chain", "")
-            by_complexity.setdefault(complexity, {}).setdefault(chain, []).append(r)
+            by_complexity.setdefault(complexity, {}).setdefault(r.get("chain", ""), []).append(r.get("weighted_score", 0.0))
+        return {comp: {chain: {"mean": round(statistics.mean(scores), 3) if scores else 0, "count": len(scores)} for chain, scores in chain_results.items()} for comp, chain_results in by_complexity.items()}
 
-        stats = {}
-        for comp, chain_results in by_complexity.items():
-            stats[comp] = {}
-            for chain, results_list in chain_results.items():
-                scores = [r.get("weighted_score", 0.0) for r in results_list]
-                stats[comp][chain] = {
-                    "mean": round(statistics.mean(scores), 3) if scores else 0,
-                    "count": len(scores),
-                }
-        return stats
+    def _compute_efficiency_metrics(self, results: list[dict]) -> dict:
+        by_chain = {}
+        for r in results:
+            by_chain.setdefault(r.get("chain", ""), []).append(r)
+        metrics = {}
+        for chain, rows in by_chain.items():
+            agent_counts = [r.get("metadata", {}).get("runtime_metrics", {}).get("agent_count") for r in rows]
+            agent_counts = [a for a in agent_counts if a is not None]
+            fanout_distribution = {}
+            fix_distribution = {}
+            activation = 0
+            for row in rows:
+                runtime = row.get("metadata", {}).get("runtime_metrics", {})
+                if runtime.get("specialized_workflow_mode"):
+                    activation += 1
+                if runtime.get("fanout_mode"):
+                    fanout_distribution[runtime["fanout_mode"]] = fanout_distribution.get(runtime["fanout_mode"], 0) + 1
+                if runtime.get("fix_strategy_mode"):
+                    fix_distribution[runtime["fix_strategy_mode"]] = fix_distribution.get(runtime["fix_strategy_mode"], 0) + 1
+            avg_agent = round(statistics.mean(agent_counts), 3) if agent_counts else 0.0
+            mean_score = round(statistics.mean([r.get("weighted_score", 0.0) for r in rows]), 3) if rows else 0.0
+            metrics[chain] = {
+                "avg_agent_count": avg_agent,
+                "score_per_agent": round(mean_score / avg_agent, 3) if avg_agent else 0.0,
+                "deep_dive_activation_rate": round(activation / len(rows), 3) if rows else 0.0,
+                "fanout_distribution": fanout_distribution,
+                "fix_strategy_distribution": fix_distribution,
+            }
+        return metrics
 
     def _compute_overall_stats(self, results: list[dict]) -> dict:
-        """全局统计"""
         if not results:
             return {}
-
         all_scores = [r.get("weighted_score", 0.0) for r in results]
         return {
             "total_evaluations": len(results),
             "overall_mean": round(statistics.mean(all_scores), 3),
             "overall_median": round(statistics.median(all_scores), 3),
-            "overall_std_dev": (
-                round(statistics.stdev(all_scores), 3)
-                if len(all_scores) > 1 else 0.0
-            ),
+            "overall_std_dev": round(statistics.stdev(all_scores), 3) if len(all_scores) > 1 else 0.0,
         }
 
     def export_report(self, report: ScoringReport, output_path: str):
-        """导出报告为 JSON"""
         data = {
             "chain_stats": {},
             "category_stats": report.category_stats,
             "complexity_stats": report.complexity_stats,
+            "efficiency_metrics": report.efficiency_metrics,
             "overall_stats": report.overall_stats,
         }
-
         for chain, stats in report.chain_stats.items():
             data["chain_stats"][chain] = {
                 "weighted_mean": stats.weighted_mean,
                 "case_count": stats.case_count,
-                "dimension_stats": {
-                    k: {
-                        "mean": v.mean, "median": v.median,
-                        "std_dev": v.std_dev, "min": v.min_score,
-                        "max": v.max_score, "count": v.count,
-                    }
-                    for k, v in stats.dimension_stats.items()
-                },
-                "stage_stats": {
-                    k: {
-                        "mean": v.mean, "median": v.median,
-                        "std_dev": v.std_dev, "min": v.min_score,
-                        "max": v.max_score, "count": v.count,
-                    }
-                    for k, v in stats.stage_stats.items()
-                },
+                "dimension_stats": {k: {"mean": v.mean, "median": v.median, "std_dev": v.std_dev, "min": v.min_score, "max": v.max_score, "count": v.count} for k, v in stats.dimension_stats.items()},
+                "stage_stats": {k: {"mean": v.mean, "median": v.median, "std_dev": v.std_dev, "min": v.min_score, "max": v.max_score, "count": v.count} for k, v in stats.stage_stats.items()},
             }
-
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        logger.info(f"Scoring report exported: {output_path}")
+        logger.info("Scoring report exported: %s", output_path)

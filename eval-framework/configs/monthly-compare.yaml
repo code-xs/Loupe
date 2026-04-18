@@ -1,12 +1,8 @@
-# 月度对比配置
-# 控制月度全链路评估参数
-
 monthly_compare:
   cases: "eval-cases/"
   chains: ["A", "B", "C", "D"]
   runs_per_case: 1
   compare_with_last_month: true
-  
   report:
     format: "markdown"
     output_path: "eval-results/monthly-report.md"
@@ -18,15 +14,13 @@ monthly_compare:
       - efficiency_metrics
       - regression_check
       - low_score_cases
-      - trend_chart_data
-  
   thresholds:
-    regression_threshold: 0.05    # 5% 回归阈值
-    target_expert_accuracy: 0.80  # 专家模式归因准确率目标
-    target_expert_vs_base: 1.00   # vs LLM 裸跑 100% 提升目标
-    target_expert_vs_external: 0.20  # vs 外部 B2C 20% 提升目标
-  
+    regression_threshold: 0.05
+    target_expert_accuracy: 0.80
+    target_expert_vs_base: 1.00
+    target_expert_vs_external: 0.20
+    target_route_hit_rate: 0.80
+    target_avg_agent_count: 6.0
   chain_c_input:
-    method: "manual"              # manual | api
+    method: "manual"
     input_dir: "eval-results/chain-c-manual/"
-    description: "Chain C 结果需人工录入到指定目录"

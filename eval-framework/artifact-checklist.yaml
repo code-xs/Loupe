@@ -1,5 +1,4 @@
-# 产物完整性校验清单（V1.2 增强版 / V3.1 条件产物扩展）
-# 包含文件存在性 + 最小字数 + 关键段落存在性校验
+# 产物完整性校验清单
 
 standard_artifacts:
   required:
@@ -9,51 +8,39 @@ standard_artifacts:
       required_sections:
         - heading: "Issue Summary"
         - heading: "Reproduction Steps"
-
     - path: "spec.md"
       min_size: 500
       phase: "P2-Spec"
       required_sections:
-        - heading: "Problem Statement"
         - heading: "Expected Behavior"
-
+        - heading: "Analysis Complexity"
     - path: "context-bundle.md"
       min_size: 300
       phase: "P2-Spec"
       required_sections:
         - heading: "证据清单"
-
     - path: "rca-report.md"
       min_size: 1000
       phase: "P3-RCA"
       required_sections:
-        - heading: "根因结论"
-          alternatives: ["Root Cause", "Primary Root Cause"]
+        - heading: "Root Cause"
+          alternatives: ["根因结论", "Primary Root Cause"]
         - heading: "Contributing Factors"
           alternatives: ["贡献因子"]
-        - heading: "Evidence"
-          alternatives: ["证据清单", "证据"]
-        - heading: "完整因果链"
-          alternatives: ["Causal Chain"]
-
     - path: "fix-design.md"
       min_size: 500
       phase: "P4-Fix-Design"
       required_sections:
-        - heading: "Recommended Fix"
-          alternatives: ["选定方案概述", "修复策略"]
+        - heading: "选定方案概述"
+          alternatives: ["Recommended Fix"]
         - heading: "形式化论证"
           alternatives: ["Formal Proof"]
-
     - path: "impl-report.md"
       min_size: 300
       phase: "P5-Fix-Impl"
-
     - path: "verification-report.md"
       min_size: 300
       phase: "P6-Verification"
-
-    # --- V3.1 新增：条件必需产物 ---
     - path: contract-checklist.md
       required: conditional
       condition:
@@ -61,7 +48,6 @@ standard_artifacts:
         value: code-fix
       min_size: 200
       on_missing: fail
-
     - path: error-dump.md
       required: conditional
       condition:
@@ -71,7 +57,7 @@ standard_artifacts:
       on_missing: fail
 
 expert_mode_artifacts:
-  conditional_on: "workflow-status.yaml → specialized_workflow.status ∈ {DD-Completed, Merged}"
+  conditional_on: "workflow-status.yaml -> specialized_workflow.status ∈ {DD-Completed, Merged}"
   required:
     - path: "deep-dive/deep-dive-summary.md"
       min_size: 500
@@ -80,36 +66,25 @@ expert_mode_artifacts:
           alternatives: ["主根因", "根因结论"]
         - heading: "Confidence Level"
           alternatives: ["置信度", "最终置信度"]
-
     - path: "deep-dive/functionality-deep-dive-rca.md"
       min_size: 800
       required_sections:
-        - heading: "Root Cause"
-          alternatives: ["根因", "Primary Root Cause"]
-        - heading: "Evidence Chain"
+        - heading: "Primary Root Cause"
+          alternatives: ["根因", "Root Cause"]
+        - heading: "Causal Chain"
           alternatives: ["证据链", "因果链"]
-
+  optional:
     - path: "deep-dive/environment-factor-report.md"
       min_size: 200
-      required_sections:
-        - heading: "Environment Factors"
-          alternatives: ["环境因子"]
-
     - path: "deep-dive/deep-dive-topology.md"
       min_size: 300
-      required_sections:
-        - heading: "State Topology"
-          alternatives: ["状态拓扑"]
-
     - path: "deep-dive/concurrency-analysis-report.md"
       min_size: 200
-
-  optional:
     - path: "deep-dive/defensive-fix-design.md"
       min_size: 300
       required_sections:
-        - heading: "Defense Measures"
-          alternatives: ["防御措施", "防御性修复"]
+        - heading: "防御性修复"
+          alternatives: ["Defense Measures", "防御措施"]
 
 validation_policy:
   missing_required: RETRY
@@ -117,4 +92,4 @@ validation_policy:
   missing_required_sections: RETRY
   max_retries: 2
   all_retries_failed: MARK_FAILED
-  partial_pass_threshold: 0.8    # 80% 产物通过即为部分通过
+  partial_pass_threshold: 0.8

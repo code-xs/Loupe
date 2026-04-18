@@ -1,16 +1,18 @@
-# Case Metadata — case-001-state-machine-race
-# Schema: eval-framework/case-schema.yaml
-
-case_id: "case-001-state-machine-race"
-title: "视频播放器状态机竞态导致黑屏卡死"
-category: "状态机紊乱"
-complexity: "Complex"
-platform: "Android"
-intermittent: "高概率偶发"
-info_completeness: "日志充分"
-expected_route: "functionality-deep-dive"
+case_id: case-001-state-machine-race
+title: 视频播放器状态机竞态导致黑屏卡死
+category: 状态机紊乱
+complexity: Complex
+platform: Android
+intermittent: 高概率偶发
+info_completeness: 日志充分
+expected_route: functionality-deep-dive
 tags:
-  - "state-machine"
-  - "video-player"
-  - "race-condition"
-  - "ANR"
+- state-machine
+- video-player
+- race-condition
+- ANR
+- fanout:complex-arbitrated
+- fix:contested-arbitrated
+- route:functionality-deep-dive
+expected_fanout_mode: complex-arbitrated
+expected_fix_mode: contested-arbitrated

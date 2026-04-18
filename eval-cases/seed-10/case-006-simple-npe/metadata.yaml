@@ -1,17 +1,19 @@
-# Case Metadata — case-006-simple-npe
-# Schema: eval-framework/case-schema.yaml
-
-case_id: "case-006-simple-npe"
-title: "列表页下拉刷新时 NullPointerException 崩溃"
-category: "Crash"
-complexity: "Simple"
-platform: "Android"
-intermittent: "必现"
-info_completeness: "日志充分"
-expected_route: "standard-rca"
+case_id: case-006-simple-npe
+title: 列表页下拉刷新时 NullPointerException 崩溃
+category: Crash
+complexity: Simple
+platform: Android
+intermittent: 必现
+info_completeness: 日志充分
+expected_route: standard-rca
 tags:
-  - "crash"
-  - "npe"
-  - "simple"
-  - "list"
-  - "refresh"
+- crash
+- npe
+- simple
+- list
+- refresh
+- fanout:simple-single
+- fix:single-proposer
+- route:standard-rca
+expected_fanout_mode: simple-single
+expected_fix_mode: single-proposer

@@ -47,10 +47,13 @@ description: >-
     </step>
 
     <step n="4" goal="加载并执行工作流编排">
+        <action>从 {config_source} 中读取 env_subagent、env_git 等环境配置变量</action>
         <load target="mobile-qa-workflow/core/workflow.xml" prompt="加载并执行，传递参数：
             - config_source: {config_source}
             - workflow_status: {workflow_status}
             - issue_description: {issue_description}
-            - intake_document_url: {intake_document_url}"/>
+            - intake_document_url: {intake_document_url}
+            - env_subagent: {env_subagent}
+            - env_git: {env_git}"/>
     </step>
 </flow>

@@ -11,6 +11,7 @@ description: Phase 6 — 验证与闭环，执行三层验证模型并生成 Kno
 - spec_file: '{workspace_folder}/spec.md'
 - fix_design: '{workspace_folder}/fix-design.md'
 - impl_report: '{workspace_folder}/impl-report.md'
+- contract_checklist: '{workspace_folder}/contract-checklist.md'
 - output_verification: '{workspace_folder}/verification-report.md'
 - output_knowledge: '{workspace_folder}/knowledge-card.md'
 - workflow_status: '{workspace_folder}/workflow-status.yaml'
@@ -20,9 +21,41 @@ description: Phase 6 — 验证与闭环，执行三层验证模型并生成 Kno
     <step n="1" goal="加载流程规范和上游产物">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
         <action>读取 {spec_file}、{fix_design}、{impl_report}</action>
+        <action>从 {impl_report} 元信息区提取 Repair-Route 和 Execution-Status 字段</action>
     </step>
 
-    <step n="2" goal="L1 — Spec 静态符合性验证">
+    <step n="2" goal="L1 — Spec 静态符合性验证 + 契约溯源交叉验证">
+        <!-- V3 新增：Repair-Route 三分支判定 -->
+        <switch condition="Repair-Route">
+            <case if="code-fix">
+                <check if="contract-checklist.md 存在">
+                    <!-- 契约溯源交叉验证 -->
+                    <action>逐条验证 contract-checklist.md 中的溯源记录：
+                        - 源文件路径是否真实存在
+                        - 行号/位置引用是否准确
+                        - 期望值与实际值是否匹配
+                        - 溯源记录条数是否 ≥ fix-design 中跨模块引用数
+                    </action>
+                    <action>异常等级映射：
+                        - **PASS**：所有溯源项匹配状态均为 ✅
+                        - **WARNING**（SUSPICIOUS）：存在标记为「待确认」的项，但无明确不匹配
+                        - **FAIL**（INSUFFICIENT）：溯源记录条数 < fix-design 跨模块引用数
+                        - **FAIL**（MISMATCH）：存在期望值与实际值不匹配的项
+                        - **FAIL**（MISSING）：溯源记录为空或关键字段缺失
+                    </action>
+                </check>
+                <check if="contract-checklist.md 不存在">
+                    <action>标记 [MISSING-REQUIRED-ARTIFACT]: contract-checklist.md</action>
+                    <action>L1 判定结果 = FAIL（code-fix 路径必须提供契约溯源检查清单）</action>
+                    <goto step="6"/>
+                </check>
+            </case>
+            <case if="non-code-fix">
+                <action>契约溯源交叉验证 = SKIPPED（非代码修复路径，无需溯源验证）</action>
+            </case>
+        </switch>
+
+        <!-- 原有 L1 验证逻辑 -->
         <check if="Impl Report 为远端变更指令">
             <action>验证指令内容是否完整覆盖 Spec 差异，配置下发条件是否正确，是否需要灰度等。</action>
             <goto step="5"/>

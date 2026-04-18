@@ -4,6 +4,30 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SKILL_ID="mobile-qa-workflow"
+FORCE_RELINK="${FORCE_RELINK:-0}"
+
+for arg in "$@"; do
+    case "$arg" in
+        --force)
+            FORCE_RELINK=1
+            ;;
+        -h|--help)
+            cat <<EOF
+Usage: bash mobile-qa-workflow/install.sh [--force]
+
+Install ${SKILL_ID} into Cursor by creating symlinks.
+
+Options:
+  --force    Replace an existing physical directory at the install path.
+EOF
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            exit 1
+            ;;
+    esac
+done
 
 create_symlink() {
     local target_dir="$1"
@@ -14,6 +38,21 @@ create_symlink() {
     if [ -L "$link_path" ]; then
         rm "$link_path"
     elif [ -d "$link_path" ]; then
+        if [ "$FORCE_RELINK" != "1" ]; then
+            cat <<EOF
+Detected an existing physical directory at:
+  $link_path
+
+This installer keeps the repository source-of-truth in:
+  $SCRIPT_DIR
+
+To avoid deleting local changes by accident, the installer will not replace
+the directory automatically. Re-run with --force after you confirm it is safe
+to remove the directory:
+  bash mobile-qa-workflow/install.sh --force
+EOF
+            exit 1
+        fi
         rm -rf "$link_path"
     fi
 

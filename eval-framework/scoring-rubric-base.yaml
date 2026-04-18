@@ -9,14 +9,19 @@ attribution_scoring:
   miss: 0.0                   # 完全未命中
   false_positive: -2.0        # 错误根因（从 0 分扣减）
 
-# 维度权重
+# 维度权重（V3.1: 9 维度，总和 = 1.00）
 weights:
-  attribution_accuracy: 0.35
-  contributing_completeness: 0.15
-  fix_correctness: 0.20
-  reasoning_depth: 0.10
-  artifact_completeness: 0.10
-  defensive_fix_quality: 0.10
+  # 原 6 维度（重分配，总和 0.85）
+  attribution_accuracy: 0.30
+  contributing_completeness: 0.12
+  fix_correctness: 0.18
+  reasoning_depth: 0.08
+  artifact_completeness: 0.09
+  defensive_fix_quality: 0.08
+  # V3.1 新增 3 维度（总和 0.15）
+  contract_first_pass_accuracy: 0.08
+  hallucination_interception: 0.04
+  self_healing_rate: 0.03
 
 # 阶段级评分（Functionality Deep-Dive）
 stage_scoring:
@@ -71,6 +76,35 @@ stage_scoring:
       - name: "architecture_quality"
         description: "修复方案架构评价"
         weight: 0.7
+
+# V3.1 新增维度评分标准
+contract_tracing_scoring:
+  contract_first_pass_accuracy:
+    description: "契约溯源首次通过准确率"
+    scoring:
+      10: "所有跨模块引用首轮溯源全部匹配，无需修正"
+      7: "首轮溯源 ≥80% 匹配，少量修正后全部通过"
+      4: "首轮溯源 50-80% 匹配，需多轮修正"
+      0: "首轮溯源 <50% 匹配或未执行溯源"
+    data_source: "contract-checklist.md 中匹配状态统计"
+
+  hallucination_interception:
+    description: "幻觉拦截率"
+    scoring:
+      10: "溯源过程中发现并修正了所有臆测引用（或无臆测发生）"
+      7: "拦截了大部分臆测引用，少量漏网"
+      4: "仅拦截了部分臆测引用"
+      0: "未执行溯源或臆测引用未被拦截"
+    data_source: "contract-checklist.md 中不匹配项 + impl-report 纠错记录"
+
+  self_healing_rate:
+    description: "自愈修复率（微验证纠错成功率）"
+    scoring:
+      10: "编码一次通过无需纠错，或所有纠错均在 3 轮内成功"
+      7: "纠错成功但消耗了 2-3 轮"
+      4: "部分纠错成功，部分失败触发 Human-Review"
+      0: "纠错全部失败，全量触发 Human-Review"
+    data_source: "impl-report 微验证纠错记录 + Execution-Status"
 
 # 质量阈值
 quality_thresholds:

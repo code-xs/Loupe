@@ -28,14 +28,33 @@
 
 ## Full 能力平台
 
+`mobile-qa-workflow/` 目录是唯一权威源。`.cursor/skills/mobile-qa-workflow` 与 `.trae/skills/mobile-qa-workflow`
+只应作为运行时软链接入口，不应在仓库中维护实体镜像，否则会产生版本漂移。
+
 ### Cursor
 
 1. 运行安装脚本，将 Skill 注册到 Cursor：
    ```bash
    bash mobile-qa-workflow/install.sh
    ```
-2. 重启 Cursor，在对话中描述质量问题即可触发 `mobile-qa-workflow` Skill
-3. Skill 入口 `SKILL.md` 会自动初始化工作区、检测环境能力、调度六阶段工作流
+2. 如安装位置已存在实体目录，脚本会停止并提示；确认旧目录可删除后，再执行：
+   ```bash
+   bash mobile-qa-workflow/install.sh --force
+   ```
+3. 重启 Cursor，在对话中描述质量问题即可触发 `mobile-qa-workflow` Skill
+4. Skill 入口 `SKILL.md` 会自动初始化工作区、检测环境能力、调度六阶段工作流
+
+### Trae
+
+1. 运行安装脚本，将 Skill 注册到 Trae：
+   ```bash
+   bash mobile-qa-workflow/install_trae.sh
+   ```
+2. 如安装位置已存在实体目录，脚本会停止并提示；确认旧目录可删除后，再执行：
+   ```bash
+   bash mobile-qa-workflow/install_trae.sh --force
+   ```
+3. 重启 Trae，在对话中描述质量问题即可触发 `mobile-qa-workflow` Skill
 
 ### CapCode / Windsurf
 
@@ -100,3 +119,35 @@ prompt = ChatPromptTemplate.from_messages([
 1. 直接粘贴 `system-prompt.md` 作为首条消息
 2. 每轮对话末尾 AI 输出 `[状态: xxx | 已完成: xxx]` 便于人工追踪
 3. 产物通过 Markdown 代码块内嵌在回复中
+
+
+---
+
+## Coder Agent 平台适配策略
+
+Coder Agent（Phase 5 修复实施子 Agent）在不同能力等级平台上的实现方式不同：
+
+| 平台能力等级 | 实现方式 | 隔离性 | 契约溯源 | 工具约束 |
+|-------------|---------|--------|---------|---------|
+| **Full**（Cursor / CapCode） | `invoke-subagent` 独立 Coder Agent | ✅ 物理隔离 | ✅ 硬门禁 | 硬 enforce |
+| **Limited**（Dify / Coze / Chat） | Phase 5 内联契约溯源步骤 | ❌ 无隔离 | ✅ 流程门禁 | 审计级 |
+| **Minimal**（纯 API） | 外部编排层负责溯源 | ❌ 无隔离 | ⚠️ 依赖外部 | 无 enforce |
+
+### Full 能力平台
+
+- Coder Agent 通过 `<invoke-subagent subagent_type="coder-agent">` 在独立上下文中运行
+- 工具白名单由 `agents/coder-agent.md` 定义并硬性 enforce：Read / Search / SearchReplace / Write / Lint / ListDir
+- 黑名单工具（Execute / Git / Network / Delete）物理不可用
+- 契约溯源检查清单（contract-checklist.md）为硬性前置门禁，未通过则阻断编码阶段
+
+### Limited 能力平台
+
+- 无子 Agent 能力，契约溯源作为 Phase 5 内联步骤执行（见 `system-prompt.md` Phase 5 Step 3）
+- 工具约束降级为审计级：主 Agent 在 impl-report 中记录实际使用的工具列表，由验证阶段人工复核
+- 契约溯源检查清单以 Markdown 表格形式内嵌于 impl-report 中
+
+### Minimal 能力平台
+
+- 外部编排层（如 LangChain / AutoGen）需自行实现契约溯源逻辑
+- 建议在编排层中增加 pre-coding hook，调用独立 LLM 完成溯源验证
+- 产物格式参照 `templates/contract-checklist.md` 模板

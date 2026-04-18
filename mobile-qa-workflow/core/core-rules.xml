@@ -97,6 +97,7 @@
                         <agent name="challenger" scenario="归因+修复">对结论执行五维质疑（归因）或四重攻击（修复）</agent>
                         <agent name="arbiter" scenario="归因+修复">汇总仲裁 + 置信度校准 / 评估矩阵裁定</agent>
                         <agent name="fix-proposer" scenario="修复">独立设计修复方案并执行四重论证</agent>
+                        <agent name="coder-agent" scenario="修复实施">契约溯源 + 精确编码 + 微验证纠错 + 产出移交</agent>
                     </agent-group>
                     <agent-group name="functionality-deep-dive" desc="功能疑难专项 Agent（mobile-qa-workflow/functionality-deep-dive/agents/）">
                         <agent name="context-reconstructor" scenario="环境重构">重建隐蔽环境因子，输出环境关联结论</agent>

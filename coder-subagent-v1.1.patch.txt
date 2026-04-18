@@ -1,0 +1,1989 @@
+diff --git a/eval-framework/artifact-checklist.yaml b/eval-framework/artifact-checklist.yaml
+index ef561d8..9a4039c 100644
+--- a/eval-framework/artifact-checklist.yaml
++++ b/eval-framework/artifact-checklist.yaml
+@@ -1,4 +1,4 @@
+-# 产物完整性校验清单（V1.2 增强版）
++# 产物完整性校验清单（V1.2 增强版 / V3.1 条件产物扩展）
+ # 包含文件存在性 + 最小字数 + 关键段落存在性校验
+ 
+ standard_artifacts:
+@@ -53,6 +53,23 @@ standard_artifacts:
+       min_size: 300
+       phase: "P6-Verification"
+ 
++    # --- V3.1 新增：条件必需产物 ---
++    - path: contract-checklist.md
++      required: conditional
++      condition:
++        field: repair_route
++        value: code-fix
++      min_size: 200
++      on_missing: fail
++
++    - path: error-dump.md
++      required: conditional
++      condition:
++        field: execution_status
++        value: Human-Review
++      min_size: 300
++      on_missing: fail
++
+ expert_mode_artifacts:
+   conditional_on: "workflow-status.yaml → specialized_workflow.status ∈ {DD-Completed, Merged}"
+   required:
+diff --git a/eval-framework/artifact_checker.py b/eval-framework/artifact_checker.py
+index 3c6d43a..e7762f7 100644
+--- a/eval-framework/artifact_checker.py
++++ b/eval-framework/artifact_checker.py
+@@ -4,6 +4,7 @@ Loupe AI 自检自测系统 — Artifact Checker (产物完整性校验)
+ 内容质量判定由 LLM-as-Judge 负责，此处仅做轻量存在性校验。
+ 
+ V1.2 增强: 新增 required_sections 关键段落存在性校验
++V3.1 增强: 新增 conditional 条件必需产物校验 + Schema 兼容层
+ """
+ 
+ import os
+@@ -11,12 +12,50 @@ import re
+ import logging
+ from dataclasses import dataclass, field
+ from pathlib import Path
++from typing import Dict, Optional
+ 
+ import yaml
+ 
+ logger = logging.getLogger(__name__)
+ 
+ 
++# ─── V3.1: 元信息解析函数（单一数据源） ────────────────────────
++
++# 展示格式 → 程序化格式的唯一标准化映射
++FIELD_MAPPING: Dict[str, str] = {
++    'Repair-Route': 'repair_route',
++    'Execution-Status': 'execution_status',
++}
++
++
++def parse_impl_report_metadata(content: str) -> Dict[str, Optional[str]]:
++    """从 impl-report.md 元信息区提取标准化键值。
++
++    解析 **Key**: value 格式的 Markdown 加粗标题行，
++    并将展示格式键名标准化为 snake_case。
++
++    Args:
++        content: impl-report.md 的完整文本内容
++
++    Returns:
++        标准化后的键值字典，例如：
++        {'repair_route': 'code-fix', 'execution_status': 'Success'}
++    """
++    metadata = {}
++    # 匹配 **Key**: value 格式
++    pattern = re.compile(r'\*\*(.+?)\*\*:\s*(.+)')
++    for match in pattern.finditer(content):
++        display_key = match.group(1).strip()
++        value = match.group(2).strip()
++        # 标准化映射
++        normalized_key = FIELD_MAPPING.get(display_key)
++        if normalized_key:
++            metadata[normalized_key] = value
++    return metadata
++
++
++# ─── Data Models ────────────────────────────────────────────────
++
+ @dataclass
+ class CheckResult:
+     """校验结果"""
+@@ -35,6 +74,7 @@ class ArtifactChecker:
+     1. 存在性
+     2. 最小字数
+     3. 关键段落存在性 (V1.2 新增)
++    4. 条件必需产物 (V3.1 新增)
+     """
+ 
+     def __init__(self, checklist_path: str):
+@@ -61,12 +101,36 @@ class ArtifactChecker:
+         """
+         result = CheckResult()
+ 
++        # V3.1: 预先解析 impl-report 元信息（供条件必需产物校验使用）
++        metadata = self._load_impl_report_metadata(output_dir)
++
+         # 1. 校验标准产物
+         standard = self.checklist.get("standard_artifacts", {})
+         required_items = standard.get("required", [])
+ 
+         for item in required_items:
+-            self._check_artifact(output_dir, item, result)
++            required_type = item.get('required', True)  # 默认 True 保持兼容
++
++            if required_type == 'conditional':
++                # V3.1 新增：条件必需产物
++                condition = item.get('condition', {})
++                condition_field = condition.get('field')
++                condition_value = condition.get('value')
++                # 从 impl-report 元信息中读取实际值
++                actual_value = metadata.get(condition_field)
++                if actual_value == condition_value:
++                    # 条件满足 → 视为 required
++                    self._check_artifact(output_dir, item, result)
++                else:
++                    # 条件不满足 → 跳过不扣分
++                    continue
++            elif required_type is True or required_type == True:
++                # 原逻辑：必需产物
++                self._check_artifact(output_dir, item, result)
++            else:
++                # 原逻辑：可选产物
++                self._check_artifact(output_dir, item, result,
++                                    is_optional=True)
+ 
+         # 2. 校验专家模式产物（仅 Chain B）
+         if chain_mode == "expert":
+@@ -101,14 +165,27 @@ class ArtifactChecker:
+ 
+         return result
+ 
++    @staticmethod
++    def _load_impl_report_metadata(output_dir: str) -> Dict[str, Optional[str]]:
++        """V3.1: 加载 impl-report.md 元信息"""
++        impl_report_path = os.path.join(output_dir, 'impl-report.md')
++        if os.path.exists(impl_report_path):
++            try:
++                with open(impl_report_path, 'r', encoding='utf-8') as f:
++                    return parse_impl_report_metadata(f.read())
++            except Exception as e:
++                logger.warning(f"Failed to parse impl-report metadata: {e}")
++        return {}
++
+     def _check_artifact(self, output_dir: str, item: dict,
+                         result: CheckResult,
+                         prefix: str = "",
+                         is_optional: bool = False):
+         """检查单个产物文件"""
+-        rel_path = item.get("path", "")
++        # V3.1 Schema 兼容层：同时支持 path/file 和 min_size/min_size_bytes
++        rel_path = item.get("path") or item.get("file", "")
+         full_path = os.path.join(output_dir, prefix, rel_path)
+-        min_size = item.get("min_size", 0)
++        min_size = item.get("min_size") or item.get("min_size_bytes", 0)
+         phase = item.get("phase", "unknown")
+         sections = item.get("required_sections", [])
+ 
+@@ -123,7 +200,12 @@ class ArtifactChecker:
+                     "path": rel_path,
+                     "phase": phase,
+                 })
+-                logger.warning(f"Missing required artifact: {full_path}")
++                # V3.1: 记录 on_missing 动作
++                on_missing = item.get("on_missing", "fail")
++                if on_missing == "fail":
++                    logger.warning(f"Missing required artifact: {full_path} (on_missing=fail)")
++                else:
++                    logger.warning(f"Missing required artifact: {full_path}")
+             return
+ 
+         # 2. 最小字数
+diff --git a/eval-framework/comparator.py b/eval-framework/comparator.py
+index bb67522..ea76550 100644
+--- a/eval-framework/comparator.py
++++ b/eval-framework/comparator.py
+@@ -1,6 +1,8 @@
+ """
+ Loupe AI 自检自测系统 — Comparator (横向对比器)
+ 对比不同 Chain 的评分结果，生成增量价值分析和回归检测。
++
++V3.1: DIMENSIONS 扩展至 9 维度
+ """
+ 
+ import json
+@@ -52,6 +54,10 @@ class Comparator:
+         "reasoning_depth",
+         "artifact_completeness",
+         "defensive_fix_quality",
++        # V3.1 新增 3 维度
++        "contract_first_pass_accuracy",
++        "hallucination_interception",
++        "self_healing_rate",
+     ]
+ 
+     CHAINS = ["A", "B", "C", "D"]
+@@ -66,7 +72,7 @@ class Comparator:
+         )
+ 
+     @staticmethod
+-    def _load_results(dir_path: str) -> list[dict]:
++    def _load_results(dir_path: str) -> list:
+         """加载评分结果"""
+         results_file = Path(dir_path) / "judge-results.json"
+         if results_file.exists():
+@@ -103,7 +109,7 @@ class Comparator:
+ 
+         return output
+ 
+-    def _build_comparison_table(self) -> list[dict]:
++    def _build_comparison_table(self) -> list:
+         """构建总览对比表"""
+         chain_means = self._compute_chain_means()
+         rows = []
+@@ -111,7 +117,7 @@ class Comparator:
+         for dim in self.DIMENSIONS + ["weighted_score"]:
+             row = {"dimension": dim}
+             for chain in self.CHAINS:
+-                row[f"chain_{chain.lower()}"] = chain_means.get(chain, {}).get(dim, 0.0)
++                row["chain_{}".format(chain.lower())] = chain_means.get(chain, {}).get(dim, 0.0)
+ 
+             # 计算增量百分比
+             a = row.get("chain_a", 0)
+@@ -130,7 +136,7 @@ class Comparator:
+ 
+     def _compute_chain_means(self) -> dict:
+         """计算各 Chain 各维度均分"""
+-        by_chain: dict[str, list] = {}
++        by_chain = {}
+         for r in self.current_results:
+             chain = r.get("chain", "")
+             by_chain.setdefault(chain, []).append(r)
+@@ -185,8 +191,7 @@ class Comparator:
+ 
+     def _breakdown_by_field(self, field_name: str) -> dict:
+         """按指定字段分组对比"""
+-        # 需要 case metadata，暂时按 case_id 分组
+-        by_group: dict[str, dict[str, list]] = {}
++        by_group = {}
+ 
+         for r in self.current_results:
+             case_id = r.get("case_id", "")
+@@ -219,7 +224,7 @@ class Comparator:
+         current_means = self._compute_chain_means()
+ 
+         # 计算 baseline 均分
+-        baseline_by_chain: dict[str, list] = {}
++        baseline_by_chain = {}
+         for r in self.baseline_results:
+             chain = r.get("chain", "")
+             baseline_by_chain.setdefault(chain, []).append(
+@@ -259,7 +264,7 @@ class Comparator:
+     def generate_pr_comment(self) -> str:
+         """生成 PR Comment 格式的对比报告"""
+         output = self.compare()
+-        return ReportGenerator.generate_pr_comment(output)
++        return ComparatorReportGenerator.generate_pr_comment(output)
+ 
+     @staticmethod
+     def _pct_change(new: float, old: float) -> float:
+@@ -269,7 +274,7 @@ class Comparator:
+         return round((new - old) / old * 100, 2)
+ 
+ 
+-class ReportGenerator:
++class ComparatorReportGenerator:
+     """
+     报告生成器
+     支持 Markdown 格式的完整对比报告和 PR Comment 简报
+@@ -291,7 +296,7 @@ class ReportGenerator:
+             b = row.get("chain_b", "-")
+             c = row.get("chain_c", "-")
+             d = row.get("chain_d", "-")
+-            lines.append(f"| {dim} | {a} | {b} | {c} | {d} |")
++            lines.append("| {} | {} | {} | {} | {} |".format(dim, a, b, c, d))
+         lines.append("")
+ 
+         # 增量价值分析
+@@ -300,8 +305,9 @@ class ReportGenerator:
+         lines.append("|---------|---------|------|---------|")
+         for key, item in output.incremental_analysis.items():
+             lines.append(
+-                f"| {item['description']} | {item['formula']} | "
+-                f"{item['value']}% | {item['question']} |"
++                "| {} | {} | {}% | {} |".format(
++                    item['description'], item['formula'],
++                    item['value'], item['question'])
+             )
+         lines.append("")
+ 
+@@ -310,9 +316,9 @@ class ReportGenerator:
+             lines.append("## ⚠️ 回归检测\n")
+             for detail in output.regression_details:
+                 lines.append(
+-                    f"- **Chain {detail['chain']}**: "
+-                    f"{detail['baseline_score']} → {detail['current_score']} "
+-                    f"({detail['change_pct']}%)"
++                    "- **Chain {}**: {} → {} ({}%)".format(
++                        detail['chain'], detail['baseline_score'],
++                        detail['current_score'], detail['change_pct'])
+                 )
+             lines.append("")
+ 
+@@ -320,10 +326,11 @@ class ReportGenerator:
+         if output.category_breakdown:
+             lines.append("## 分类型对比\n")
+             for cat, chain_data in output.category_breakdown.items():
+-                lines.append(f"### {cat}\n")
++                lines.append("### {}\n".format(cat))
+                 for chain, stats in chain_data.items():
+                     lines.append(
+-                        f"- Chain {chain}: mean={stats['mean']}, n={stats['count']}"
++                        "- Chain {}: mean={}, n={}".format(
++                            chain, stats['mean'], stats['count'])
+                     )
+                 lines.append("")
+ 
+@@ -347,8 +354,8 @@ class ReportGenerator:
+         expert_vs_std = inc.get("expert_vs_standard", {}).get("value", 0)
+         expert_vs_base = inc.get("expert_vs_baseline", {}).get("value", 0)
+ 
+-        lines.append(f"**专家模式 vs 主流程**: {expert_vs_std:+.1f}%")
+-        lines.append(f"**专家模式 vs LLM 裸跑**: {expert_vs_base:+.1f}%\n")
++        lines.append("**专家模式 vs 主流程**: {:+.1f}%".format(expert_vs_std))
++        lines.append("**专家模式 vs LLM 裸跑**: {:+.1f}%\n".format(expert_vs_base))
+ 
+         # 简表
+         lines.append("| 维度 | Chain A | Chain B | Chain D |")
+@@ -360,13 +367,13 @@ class ReportGenerator:
+             a = row.get("chain_a", "-")
+             b = row.get("chain_b", "-")
+             d = row.get("chain_d", "-")
+-            lines.append(f"| {dim} | {a} | {b} | {d} |")
++            lines.append("| {} | {} | {} | {} |".format(dim, a, b, d))
+ 
+         # 回归警告
+         if output.regression_detected:
+             lines.append("\n⚠️ **检测到回归**：")
+             for d in output.regression_details:
+-                lines.append(f"- Chain {d['chain']}: {d['change_pct']}%")
++                lines.append("- Chain {}: {}%".format(d['chain'], d['change_pct']))
+ 
+         return "\n".join(lines)
+ 
+@@ -405,8 +412,8 @@ def main():
+         print(comment)
+     else:
+         output = comparator.compare()
+-        report = ReportGenerator.generate_full_report(output, args.output)
+-        print(f"Report generated: {args.output}")
++        report = ComparatorReportGenerator.generate_full_report(output, args.output)
++        print("Report generated: {}".format(args.output))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/eval-framework/judge.py b/eval-framework/judge.py
+index 46e9401..0099cda 100644
+--- a/eval-framework/judge.py
++++ b/eval-framework/judge.py
+@@ -5,7 +5,7 @@ Loupe AI 自检自测系统 — LLM-as-Judge (评分核心)
+ - 在干净上下文中工作，读取静态产物文件
+ - Judge 不得看到 Chain 标识（盲评）
+ - 每次评分独立上下文（无跨 Case 记忆）
+-- 6 维度评估: 归因准确率/贡献因子完整性/修复方向正确性/推理链深度/产物完整性/防御性修复质量
++- 9 维度评估 (V3.1): 原 6 维度 + contract_first_pass_accuracy / hallucination_interception / self_healing_rate
+ """
+ 
+ import os
+@@ -126,6 +126,27 @@ JUDGE_EVAL_PROMPT = """## 评估任务
+ - 4分: 仅修复直接问题，无防御考虑
+ - 0分: 修复方案可能引入新风险
+ 
++#### 7. 契约溯源首次通过准确率 (contract_first_pass_accuracy) — 权重 {w_contract}
++- 10分: 所有跨模块引用首轮溯源全部匹配，无需修正
++- 7分: 首轮溯源 ≥80% 匹配，少量修正后全部通过
++- 4分: 首轮溯源 50-80% 匹配，需多轮修正
++- 0分: 首轮溯源 <50% 匹配或未执行溯源
++数据来源: contract-checklist.md 中匹配状态统计
++
++#### 8. 幻觉拦截率 (hallucination_interception) — 权重 {w_hallucination}
++- 10分: 溯源过程中发现并修正了所有臆测引用（或无臆测发生）
++- 7分: 拦截了大部分臆测引用，少量漏网
++- 4分: 仅拦截了部分臆测引用
++- 0分: 未执行溯源或臆测引用未被拦截
++数据来源: contract-checklist.md 中不匹配项 + impl-report 纠错记录
++
++#### 9. 自愈修复率 (self_healing_rate) — 权重 {w_self_healing}
++- 10分: 编码一次通过无需纠错，或所有纠错均在 3 轮内成功
++- 7分: 纠错成功但消耗了 2-3 轮
++- 4分: 部分纠错成功，部分失败触发 Human-Review
++- 0分: 纠错全部失败，全量触发 Human-Review
++数据来源: impl-report 微验证纠错记录 + Execution-Status
++
+ 请输出严格 JSON 格式:
+ ```json
+ {{
+@@ -135,7 +156,10 @@ JUDGE_EVAL_PROMPT = """## 评估任务
+     "fix_correctness": <0-10>,
+     "reasoning_depth": <0-10>,
+     "artifact_completeness": <0-10>,
+-    "defensive_fix_quality": <0-10>
++    "defensive_fix_quality": <0-10>,
++    "contract_first_pass_accuracy": <0-10>,
++    "hallucination_interception": <0-10>,
++    "self_healing_rate": <0-10>
+   }},
+   "reasoning": {{
+     "attribution_accuracy": "<评分理由>",
+@@ -143,7 +167,10 @@ JUDGE_EVAL_PROMPT = """## 评估任务
+     "fix_correctness": "<评分理由>",
+     "reasoning_depth": "<评分理由>",
+     "artifact_completeness": "<评分理由>",
+-    "defensive_fix_quality": "<评分理由>"
++    "defensive_fix_quality": "<评分理由>",
++    "contract_first_pass_accuracy": "<评分理由>",
++    "hallucination_interception": "<评分理由>",
++    "self_healing_rate": "<评分理由>"
+   }},
+   "stage_scores": {{
+     "F1_context_reconstruction": <0-10>,
+@@ -171,12 +198,15 @@ class LLMJudge:
+         self.rubric = self._load_rubric(rubric_path)
+         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+         self.weights = self.rubric.get("weights", {
+-            "attribution_accuracy": 0.35,
+-            "contributing_completeness": 0.15,
+-            "fix_correctness": 0.20,
+-            "reasoning_depth": 0.10,
+-            "artifact_completeness": 0.10,
+-            "defensive_fix_quality": 0.10,
++            "attribution_accuracy": 0.30,
++            "contributing_completeness": 0.12,
++            "fix_correctness": 0.18,
++            "reasoning_depth": 0.08,
++            "artifact_completeness": 0.09,
++            "defensive_fix_quality": 0.08,
++            "contract_first_pass_accuracy": 0.08,
++            "hallucination_interception": 0.04,
++            "self_healing_rate": 0.03,
+         })
+ 
+     @staticmethod
+@@ -208,12 +238,15 @@ class LLMJudge:
+             expected_contributing=case.expected_contributing,
+             expected_fix_direction=case.expected_fix_direction,
+             analysis_output=analysis_text,
+-            w_attribution=self.weights.get("attribution_accuracy", 0.35),
+-            w_contributing=self.weights.get("contributing_completeness", 0.15),
+-            w_fix=self.weights.get("fix_correctness", 0.20),
+-            w_reasoning=self.weights.get("reasoning_depth", 0.10),
+-            w_artifact=self.weights.get("artifact_completeness", 0.10),
+-            w_defensive=self.weights.get("defensive_fix_quality", 0.10),
++            w_attribution=self.weights.get("attribution_accuracy", 0.30),
++            w_contributing=self.weights.get("contributing_completeness", 0.12),
++            w_fix=self.weights.get("fix_correctness", 0.18),
++            w_reasoning=self.weights.get("reasoning_depth", 0.08),
++            w_artifact=self.weights.get("artifact_completeness", 0.09),
++            w_defensive=self.weights.get("defensive_fix_quality", 0.08),
++            w_contract=self.weights.get("contract_first_pass_accuracy", 0.08),
++            w_hallucination=self.weights.get("hallucination_interception", 0.04),
++            w_self_healing=self.weights.get("self_healing_rate", 0.03),
+         )
+ 
+         # 调用 LLM
+@@ -269,6 +302,8 @@ class LLMJudge:
+             "issue-card.md",
+             "impl-report.md",
+             "verification-report.md",
++            "contract-checklist.md",       # V3.1 新增
++            "error-dump.md",               # V3.1 新增
+             "deep-dive/deep-dive-summary.md",
+             "deep-dive/functionality-deep-dive-rca.md",
+             "deep-dive/defensive-fix-design.md",
+@@ -326,6 +361,9 @@ class LLMJudge:
+                 "reasoning_depth": 5.0,
+                 "artifact_completeness": 5.0,
+                 "defensive_fix_quality": 5.0,
++                "contract_first_pass_accuracy": 5.0,
++                "hallucination_interception": 5.0,
++                "self_healing_rate": 5.0,
+             },
+             "reasoning": {
+                 "attribution_accuracy": "[占位 - 需要真实 Judge LLM]",
+@@ -334,6 +372,9 @@ class LLMJudge:
+                 "reasoning_depth": "[占位]",
+                 "artifact_completeness": "[占位]",
+                 "defensive_fix_quality": "[占位]",
++                "contract_first_pass_accuracy": "[占位]",
++                "hallucination_interception": "[占位]",
++                "self_healing_rate": "[占位]",
+             },
+             "stage_scores": {
+                 "F1_context_reconstruction": 5.0,
+@@ -381,6 +422,10 @@ class LLMJudge:
+             "reasoning_depth": r"reasoning_depth[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+             "artifact_completeness": r"artifact_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+             "defensive_fix_quality": r"defensive_fix_quality[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++            # V3.1 新增 3 维度
++            "contract_first_pass_accuracy": r"contract_first_pass_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++            "hallucination_interception": r"hallucination_interception[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++            "self_healing_rate": r"self_healing_rate[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+         }
+         for key, pattern in patterns.items():
+             match = re.search(pattern, text)
+@@ -417,12 +462,15 @@ class LLMJudge:
+             # 用自定义权重重算
+             total = 0.0
+             default_weights = {
+-                "attribution_accuracy": 0.35,
+-                "contributing_completeness": 0.15,
+-                "fix_correctness": 0.20,
+-                "reasoning_depth": 0.10,
+-                "artifact_completeness": 0.10,
+-                "defensive_fix_quality": 0.10,
++                "attribution_accuracy": 0.30,
++                "contributing_completeness": 0.12,
++                "fix_correctness": 0.18,
++                "reasoning_depth": 0.08,
++                "artifact_completeness": 0.09,
++                "defensive_fix_quality": 0.08,
++                "contract_first_pass_accuracy": 0.08,
++                "hallucination_interception": 0.04,
++                "self_healing_rate": 0.03,
+             }
+             weights = {**default_weights, **custom_weights}
+             for dim, weight in weights.items():
+diff --git a/eval-framework/report_generator.py b/eval-framework/report_generator.py
+index 7797062..8cb568d 100644
+--- a/eval-framework/report_generator.py
++++ b/eval-framework/report_generator.py
+@@ -1,6 +1,8 @@
+ """
+ Loupe AI 自检自测系统 — Report Generator (报告生成器)
+ 生成各类评估报告：完整报告、PR Comment、月度对比、趋势分析。
++
++V3.1: 适配 9 维度展示
+ """
+ 
+ import json
+@@ -18,7 +20,7 @@ class ReportGenerator:
+     def __init__(self, results_dir: str = "eval-results/"):
+         self.results_dir = results_dir
+ 
+-    def generate_baseline_report(self, eval_results: list[dict],
++    def generate_baseline_report(self, eval_results: list,
+                                   scoring_report: dict,
+                                   comparison_output: dict = None,
+                                   output_path: str = "") -> str:
+@@ -36,12 +38,12 @@ class ReportGenerator:
+         """
+         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+         lines = [
+-            f"# Loupe 基准评估报告",
+-            f"",
+-            f"**生成时间**: {now}",
+-            f"**评估 Case 数**: {len(set(r.get('case_id', '') for r in eval_results))}",
+-            f"**评估链路数**: {len(set(r.get('chain', '') for r in eval_results))}",
+-            f"**总评估次数**: {len(eval_results)}",
++            "# Loupe 基准评估报告",
++            "",
++            "**生成时间**: {}".format(now),
++            "**评估 Case 数**: {}".format(len(set(r.get('case_id', '') for r in eval_results))),
++            "**评估链路数**: {}".format(len(set(r.get('chain', '') for r in eval_results))),
++            "**总评估次数**: {}".format(len(eval_results)),
+             "",
+             "---",
+             "",
+@@ -55,33 +57,35 @@ class ReportGenerator:
+             lines.append("|-------|---------|---------|")
+             for chain, stats in sorted(chain_stats.items()):
+                 lines.append(
+-                    f"| {chain} | {stats.get('weighted_mean', 0):.3f} | "
+-                    f"{stats.get('case_count', 0)} |"
++                    "| {} | {:.3f} | {} |".format(
++                        chain, stats.get('weighted_mean', 0), stats.get('case_count', 0))
+                 )
+             lines.append("")
+ 
+-        # 维度明细
++        # 维度明细 (V3.1: 9 维度)
+         if chain_stats:
+             lines.append("## 维度明细评分\n")
+             dims = [
+                 "attribution_accuracy", "contributing_completeness",
+                 "fix_correctness", "reasoning_depth",
+                 "artifact_completeness", "defensive_fix_quality",
++                "contract_first_pass_accuracy", "hallucination_interception",
++                "self_healing_rate",
+             ]
+             header = "| 维度 |"
+             sep = "|------|"
+             for chain in sorted(chain_stats.keys()):
+-                header += f" {chain} |"
++                header += " {} |".format(chain)
+                 sep += "------|"
+             lines.append(header)
+             lines.append(sep)
+ 
+             for dim in dims:
+-                row = f"| {dim} |"
++                row = "| {} |".format(dim)
+                 for chain in sorted(chain_stats.keys()):
+                     dim_stats = chain_stats[chain].get("dimension_stats", {}).get(dim, {})
+                     mean = dim_stats.get("mean", 0)
+-                    row += f" {mean:.2f} |"
++                    row += " {:.2f} |".format(mean)
+                 lines.append(row)
+             lines.append("")
+ 
+@@ -100,17 +104,17 @@ class ReportGenerator:
+             header = "| Stage |"
+             sep = "|-------|"
+             for chain in sorted(chain_stats.keys()):
+-                header += f" {chain} |"
++                header += " {} |".format(chain)
+                 sep += "------|"
+             lines.append(header)
+             lines.append(sep)
+ 
+             for stage in stages:
+-                row = f"| {stage} |"
++                row = "| {} |".format(stage)
+                 for chain in sorted(chain_stats.keys()):
+                     s_stats = chain_stats[chain].get("stage_stats", {}).get(stage, {})
+                     mean = s_stats.get("mean", 0)
+-                    row += f" {mean:.2f} |" if mean > 0 else " N/A |"
++                    row += " {:.2f} |".format(mean) if mean > 0 else " N/A |"
+                 lines.append(row)
+             lines.append("")
+ 
+@@ -119,9 +123,10 @@ class ReportGenerator:
+         if cat_stats:
+             lines.append("## 分类型评分分布\n")
+             for cat, chain_data in sorted(cat_stats.items()):
+-                lines.append(f"### {cat}\n")
++                lines.append("### {}\n".format(cat))
+                 for chain, data in sorted(chain_data.items()):
+-                    lines.append(f"- Chain {chain}: mean={data.get('mean', 0):.3f} (n={data.get('count', 0)})")
++                    lines.append("- Chain {}: mean={:.3f} (n={})".format(
++                        chain, data.get('mean', 0), data.get('count', 0)))
+                 lines.append("")
+ 
+         # 复杂度分布
+@@ -129,9 +134,10 @@ class ReportGenerator:
+         if comp_stats:
+             lines.append("## 复杂度级别评分分布\n")
+             for comp, chain_data in sorted(comp_stats.items()):
+-                lines.append(f"### {comp}\n")
++                lines.append("### {}\n".format(comp))
+                 for chain, data in sorted(chain_data.items()):
+-                    lines.append(f"- Chain {chain}: mean={data.get('mean', 0):.3f} (n={data.get('count', 0)})")
++                    lines.append("- Chain {}: mean={:.3f} (n={})".format(
++                        chain, data.get('mean', 0), data.get('count', 0)))
+                 lines.append("")
+ 
+         # 低分 Case 列表
+@@ -146,8 +152,9 @@ class ReportGenerator:
+                 scores = r.get("scores", {})
+                 weakest = min(scores, key=scores.get) if scores else "N/A"
+                 lines.append(
+-                    f"| {r.get('case_id', '')} | {r.get('chain', '')} | "
+-                    f"{r.get('weighted_score', 0):.2f} | {weakest} |"
++                    "| {} | {} | {:.2f} | {} |".format(
++                        r.get('case_id', ''), r.get('chain', ''),
++                        r.get('weighted_score', 0), weakest)
+                 )
+             lines.append("")
+ 
+@@ -158,7 +165,7 @@ class ReportGenerator:
+         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+         with open(output_path, "w", encoding="utf-8") as f:
+             f.write(report)
+-        logger.info(f"Baseline report generated: {output_path}")
++        logger.info("Baseline report generated: {}".format(output_path))
+ 
+         return report
+ 
+@@ -170,9 +177,9 @@ class ReportGenerator:
+         """生成迭代改进报告"""
+         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+         lines = [
+-            f"# 迭代改进报告 — 第 {iteration_num} 轮",
+-            f"",
+-            f"**时间**: {now}",
++            "# 迭代改进报告 — 第 {} 轮".format(iteration_num),
++            "",
++            "**时间**: {}".format(now),
+             "",
+             "## 改进前后对比\n",
+             "| 维度 | 改进前 | 改进后 | 变化 |",
+@@ -185,14 +192,15 @@ class ReportGenerator:
+             change = after - before
+             emoji = "📈" if change > 0 else ("📉" if change < 0 else "➡️")
+             lines.append(
+-                f"| {dim} | {before:.2f} | {after:.2f} | {emoji} {change:+.2f} |"
++                "| {} | {:.2f} | {:.2f} | {} {:+.2f} |".format(
++                    dim, before, after, emoji, change)
+             )
+ 
+         lines.append("")
+         lines.append("## 改进方案\n")
+-        lines.append(f"- **目标文件**: {improvement_plan.get('target_file', 'N/A')}")
+-        lines.append(f"- **改进类型**: {improvement_plan.get('type', 'N/A')}")
+-        lines.append(f"- **改进描述**: {improvement_plan.get('description', 'N/A')}")
++        lines.append("- **目标文件**: {}".format(improvement_plan.get('target_file', 'N/A')))
++        lines.append("- **改进类型**: {}".format(improvement_plan.get('type', 'N/A')))
++        lines.append("- **改进描述**: {}".format(improvement_plan.get('description', 'N/A')))
+ 
+         report = "\n".join(lines)
+ 
+diff --git a/eval-framework/scoring-rubric-base.yaml b/eval-framework/scoring-rubric-base.yaml
+index 4ef8a02..167fd64 100644
+--- a/eval-framework/scoring-rubric-base.yaml
++++ b/eval-framework/scoring-rubric-base.yaml
+@@ -9,14 +9,19 @@ attribution_scoring:
+   miss: 0.0                   # 完全未命中
+   false_positive: -2.0        # 错误根因（从 0 分扣减）
+ 
+-# 维度权重
++# 维度权重（V3.1: 9 维度，总和 = 1.00）
+ weights:
+-  attribution_accuracy: 0.35
+-  contributing_completeness: 0.15
+-  fix_correctness: 0.20
+-  reasoning_depth: 0.10
+-  artifact_completeness: 0.10
+-  defensive_fix_quality: 0.10
++  # 原 6 维度（重分配，总和 0.85）
++  attribution_accuracy: 0.30
++  contributing_completeness: 0.12
++  fix_correctness: 0.18
++  reasoning_depth: 0.08
++  artifact_completeness: 0.09
++  defensive_fix_quality: 0.08
++  # V3.1 新增 3 维度（总和 0.15）
++  contract_first_pass_accuracy: 0.08
++  hallucination_interception: 0.04
++  self_healing_rate: 0.03
+ 
+ # 阶段级评分（Functionality Deep-Dive）
+ stage_scoring:
+@@ -72,6 +77,35 @@ stage_scoring:
+         description: "修复方案架构评价"
+         weight: 0.7
+ 
++# V3.1 新增维度评分标准
++contract_tracing_scoring:
++  contract_first_pass_accuracy:
++    description: "契约溯源首次通过准确率"
++    scoring:
++      10: "所有跨模块引用首轮溯源全部匹配，无需修正"
++      7: "首轮溯源 ≥80% 匹配，少量修正后全部通过"
++      4: "首轮溯源 50-80% 匹配，需多轮修正"
++      0: "首轮溯源 <50% 匹配或未执行溯源"
++    data_source: "contract-checklist.md 中匹配状态统计"
++
++  hallucination_interception:
++    description: "幻觉拦截率"
++    scoring:
++      10: "溯源过程中发现并修正了所有臆测引用（或无臆测发生）"
++      7: "拦截了大部分臆测引用，少量漏网"
++      4: "仅拦截了部分臆测引用"
++      0: "未执行溯源或臆测引用未被拦截"
++    data_source: "contract-checklist.md 中不匹配项 + impl-report 纠错记录"
++
++  self_healing_rate:
++    description: "自愈修复率（微验证纠错成功率）"
++    scoring:
++      10: "编码一次通过无需纠错，或所有纠错均在 3 轮内成功"
++      7: "纠错成功但消耗了 2-3 轮"
++      4: "部分纠错成功，部分失败触发 Human-Review"
++      0: "纠错全部失败，全量触发 Human-Review"
++    data_source: "impl-report 微验证纠错记录 + Execution-Status"
++
+ # 质量阈值
+ quality_thresholds:
+   pass: 7.5                   # ≥ 7.5 分为通过
+diff --git a/eval-framework/scoring_engine.py b/eval-framework/scoring_engine.py
+index 5d03929..dab922b 100644
+--- a/eval-framework/scoring_engine.py
++++ b/eval-framework/scoring_engine.py
+@@ -2,6 +2,8 @@
+ Loupe AI 自检自测系统 — Scoring Engine (评分计算引擎)
+ 负责评分维度计算、加权汇总、统计分析。
+ 支持阶段级拆分评分 (F1-F5 / P1-P6) 和 Case 分组统计。
++
++V3.1: 扩展至 9 维度 + 权重总和断言
+ """
+ 
+ import json
+@@ -59,6 +61,10 @@ class ScoringEngine:
+         "reasoning_depth",
+         "artifact_completeness",
+         "defensive_fix_quality",
++        # V3.1 新增 3 维度
++        "contract_first_pass_accuracy",
++        "hallucination_interception",
++        "self_healing_rate",
+     ]
+ 
+     STAGES = [
+@@ -72,13 +78,19 @@ class ScoringEngine:
+     def __init__(self, rubric_path: str = "eval-framework/scoring-rubric-base.yaml"):
+         self.rubric = self._load_rubric(rubric_path)
+         self.weights = self.rubric.get("weights", {
+-            "attribution_accuracy": 0.35,
+-            "contributing_completeness": 0.15,
+-            "fix_correctness": 0.20,
+-            "reasoning_depth": 0.10,
+-            "artifact_completeness": 0.10,
+-            "defensive_fix_quality": 0.10,
++            "attribution_accuracy": 0.30,
++            "contributing_completeness": 0.12,
++            "fix_correctness": 0.18,
++            "reasoning_depth": 0.08,
++            "artifact_completeness": 0.09,
++            "defensive_fix_quality": 0.08,
++            "contract_first_pass_accuracy": 0.08,
++            "hallucination_interception": 0.04,
++            "self_healing_rate": 0.03,
+         })
++        # V3.1: 权重总和断言
++        assert abs(sum(self.weights.values()) - 1.0) < 1e-6, \
++            f"Weights sum to {sum(self.weights.values())}, expected 1.0"
+ 
+     @staticmethod
+     def _load_rubric(path: str) -> dict:
+diff --git a/eval-framework/tests/test_judge_parse.py b/eval-framework/tests/test_judge_parse.py
+new file mode 100644
+index 0000000..cfff79b
+--- /dev/null
++++ b/eval-framework/tests/test_judge_parse.py
+@@ -0,0 +1,175 @@
++"""
++Unit tests for LLMJudge._fallback_parse()
++Covers: new dimension extraction, mixed old/new output, boundary values, missing dimensions.
++
++V3.1: 验证 9 维度正则解析的正确性
++"""
++
++import re
++import unittest
++
++
++def _fallback_parse(text: str) -> dict:
++    """Copy of LLMJudge._fallback_parse for isolated testing (avoids Python 3.7 import issues)"""
++    scores = {}
++    patterns = {
++        "attribution_accuracy": r"attribution_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "contributing_completeness": r"contributing_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "fix_correctness": r"fix_correctness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "reasoning_depth": r"reasoning_depth[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "artifact_completeness": r"artifact_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "defensive_fix_quality": r"defensive_fix_quality[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "contract_first_pass_accuracy": r"contract_first_pass_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "hallucination_interception": r"hallucination_interception[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++        "self_healing_rate": r"self_healing_rate[\"']?\s*:\s*(\d+(?:\.\d+)?)",
++    }
++    for key, pattern in patterns.items():
++        match = re.search(pattern, text)
++        if match:
++            scores[key] = float(match.group(1))
++        else:
++            scores[key] = 0.0
++    return scores
++
++
++class TestFallbackParse(unittest.TestCase):
++    """_fallback_parse 正则解析单元测试"""
++
++    def test_all_nine_dimensions_normal(self):
++        """正常提取全部 9 维度分数"""
++        text = """
++        "attribution_accuracy": 8.5,
++        "contributing_completeness": 7.0,
++        "fix_correctness": 9.0,
++        "reasoning_depth": 6.5,
++        "artifact_completeness": 8.0,
++        "defensive_fix_quality": 7.5,
++        "contract_first_pass_accuracy": 9.0,
++        "hallucination_interception": 8.0,
++        "self_healing_rate": 7.0
++        """
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["attribution_accuracy"], 8.5)
++        self.assertEqual(scores["contributing_completeness"], 7.0)
++        self.assertEqual(scores["fix_correctness"], 9.0)
++        self.assertEqual(scores["reasoning_depth"], 6.5)
++        self.assertEqual(scores["artifact_completeness"], 8.0)
++        self.assertEqual(scores["defensive_fix_quality"], 7.5)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 9.0)
++        self.assertEqual(scores["hallucination_interception"], 8.0)
++        self.assertEqual(scores["self_healing_rate"], 7.0)
++
++    def test_new_dimensions_only(self):
++        """仅包含新维度分数时能正确提取"""
++        text = """
++        contract_first_pass_accuracy: 10,
++        hallucination_interception: 4,
++        self_healing_rate: 0
++        """
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 10.0)
++        self.assertEqual(scores["hallucination_interception"], 4.0)
++        self.assertEqual(scores["self_healing_rate"], 0.0)
++
++    def test_mixed_old_new_dimensions(self):
++        """新旧维度混合输出的正确解析"""
++        text = """
++        attribution_accuracy: 8,
++        fix_correctness: 7,
++        contract_first_pass_accuracy: 9,
++        self_healing_rate: 6
++        """
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["attribution_accuracy"], 8.0)
++        self.assertEqual(scores["fix_correctness"], 7.0)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 9.0)
++        self.assertEqual(scores["self_healing_rate"], 6.0)
++        # 缺失的维度应为 0.0
++        self.assertEqual(scores["contributing_completeness"], 0.0)
++        self.assertEqual(scores["hallucination_interception"], 0.0)
++
++    def test_boundary_value_zero(self):
++        """边界值: 0 分"""
++        text = '"contract_first_pass_accuracy": 0'
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 0.0)
++
++    def test_boundary_value_ten(self):
++        """边界值: 10 分"""
++        text = '"self_healing_rate": 10'
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["self_healing_rate"], 10.0)
++
++    def test_boundary_value_decimal(self):
++        """边界值: 小数分数"""
++        text = '"hallucination_interception": 7.5'
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["hallucination_interception"], 7.5)
++
++    def test_missing_all_dimensions(self):
++        """所有维度缺失时应返回 0.0"""
++        text = "This text contains no scores at all."
++        scores = _fallback_parse(text)
++        self.assertEqual(len(scores), 9)
++        for dim, score in scores.items():
++            self.assertEqual(score, 0.0, "{} should be 0.0 when missing".format(dim))
++
++    def test_missing_new_dimensions_only(self):
++        """仅缺失新维度时，旧维度正常提取，新维度为 0.0"""
++        text = """
++        "attribution_accuracy": 8,
++        "contributing_completeness": 7,
++        "fix_correctness": 9,
++        "reasoning_depth": 6,
++        "artifact_completeness": 8,
++        "defensive_fix_quality": 7
++        """
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["attribution_accuracy"], 8.0)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 0.0)
++        self.assertEqual(scores["hallucination_interception"], 0.0)
++        self.assertEqual(scores["self_healing_rate"], 0.0)
++
++    def test_json_with_quotes(self):
++        """带引号的 JSON 格式字符串"""
++        text = '''
++        {
++            "scores": {
++                "attribution_accuracy": 8,
++                "contributing_completeness": 7,
++                "fix_correctness": 9,
++                "reasoning_depth": 6,
++                "artifact_completeness": 8,
++                "defensive_fix_quality": 7,
++                "contract_first_pass_accuracy": 9,
++                "hallucination_interception": 8,
++                "self_healing_rate": 7
++            }
++        }
++        '''
++        scores = _fallback_parse(text)
++        self.assertEqual(scores["contract_first_pass_accuracy"], 9.0)
++        self.assertEqual(scores["hallucination_interception"], 8.0)
++        self.assertEqual(scores["self_healing_rate"], 7.0)
++
++    def test_returns_exactly_nine_keys(self):
++        """返回结果必须恰好包含 9 个维度"""
++        text = ""
++        scores = _fallback_parse(text)
++        self.assertEqual(len(scores), 9)
++        expected_keys = {
++            "attribution_accuracy",
++            "contributing_completeness",
++            "fix_correctness",
++            "reasoning_depth",
++            "artifact_completeness",
++            "defensive_fix_quality",
++            "contract_first_pass_accuracy",
++            "hallucination_interception",
++            "self_healing_rate",
++        }
++        self.assertEqual(set(scores.keys()), expected_keys)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/eval-framework/weakness_detector.py b/eval-framework/weakness_detector.py
+index fe63805..07576a5 100644
+--- a/eval-framework/weakness_detector.py
++++ b/eval-framework/weakness_detector.py
+@@ -1,6 +1,8 @@
+ """
+ Loupe AI 自检自测系统 — Weakness Detector (薄弱环节定位)
+ 分析评估结果，定位低分 Case 类型和 Stage，输出改进优先级。
++
++V3.1: DIMENSIONS 扩展至 9 维度 + 新增 3 维度归因规则
+ """
+ 
+ import logging
+@@ -50,6 +52,10 @@ class WeaknessDetector:
+         "reasoning_depth",
+         "artifact_completeness",
+         "defensive_fix_quality",
++        # V3.1 新增 3 维度
++        "contract_first_pass_accuracy",
++        "hallucination_interception",
++        "self_healing_rate",
+     ]
+ 
+     STAGES = [
+@@ -60,7 +66,7 @@ class WeaknessDetector:
+         "F5_defensive_fix",
+     ]
+ 
+-    # 维度到改进类型的映射
++    # 维度到改进类型的映射 (V3.1: 新增 3 维度归因规则)
+     DIM_TO_IMPROVEMENT = {
+         "attribution_accuracy": "prompt",
+         "contributing_completeness": "reference",
+@@ -68,6 +74,10 @@ class WeaknessDetector:
+         "reasoning_depth": "agent",
+         "artifact_completeness": "template",
+         "defensive_fix_quality": "reference",
++        # V3.1 新增归因
++        "contract_first_pass_accuracy": "agent",       # 溯源准确率低 → 改进 coder-agent 溯源逻辑
++        "hallucination_interception": "prompt",         # 幻觉拦截率低 → 强化溯源 prompt 约束
++        "self_healing_rate": "architecture",            # 自愈率低 → 改进微验证纠错架构
+     }
+ 
+     STAGE_TO_FILE = {
+@@ -81,7 +91,7 @@ class WeaknessDetector:
+     def __init__(self, threshold: float = 7.0):
+         self.threshold = threshold
+ 
+-    def analyze(self, eval_results: list[dict],
++    def analyze(self, eval_results: list,
+                 case_metadata: dict = None) -> WeaknessReport:
+         """
+         执行薄弱环节分析
+@@ -121,10 +131,10 @@ class WeaknessDetector:
+ 
+         return report
+ 
+-    def _analyze_by_type(self, results: list[dict],
+-                          metadata: dict) -> list[WeaknessItem]:
++    def _analyze_by_type(self, results: list,
++                          metadata: dict) -> list:
+         """按问题类型分析薄弱维度"""
+-        by_type: dict[str, list] = {}
++        by_type = {}
+         for r in results:
+             case_id = r.get("case_id", "")
+             meta = metadata.get(case_id, {})
+@@ -155,7 +165,7 @@ class WeaknessDetector:
+ 
+         return weaknesses
+ 
+-    def _analyze_by_stage(self, results: list[dict]) -> list[WeaknessItem]:
++    def _analyze_by_stage(self, results: list) -> list:
+         """按 Stage 分析薄弱阶段"""
+         weaknesses = []
+ 
+@@ -177,7 +187,7 @@ class WeaknessDetector:
+                     and r.get("stage_scores", {}).get(stage, 0) > 0
+                 ]
+                 weaknesses.append(WeaknessItem(
+-                    category=f"Stage:{stage}",
++                    category="Stage:{}".format(stage),
+                     dimension=stage,
+                     mean_score=round(mean, 3),
+                     threshold=self.threshold,
+@@ -188,10 +198,10 @@ class WeaknessDetector:
+ 
+         return weaknesses
+ 
+-    def _cross_analyze(self, results: list[dict],
++    def _cross_analyze(self, results: list,
+                         metadata: dict) -> dict:
+         """交叉分析: Case 类型 × Stage"""
+-        cross: dict[str, dict[str, list]] = {}
++        cross = {}
+ 
+         for r in results:
+             case_id = r.get("case_id", "")
+@@ -225,13 +235,17 @@ class WeaknessDetector:
+         total = len(report.weaknesses)
+         top = report.top_priorities
+ 
+-        lines = [f"发现 {total} 个薄弱环节，Top 5 改进优先级：\n"]
++        lines = ["发现 {} 个薄弱环节，Top 5 改进优先级：\n".format(total)]
+         for i, w in enumerate(top, 1):
+             lines.append(
+-                f"{i}. **{w.category} / {w.dimension}**: "
+-                f"均分 {w.mean_score:.1f} (阈值 {w.threshold}), "
+-                f"差距 {w.gap:.1f}, 影响 {len(w.affected_cases)} 个 Case, "
+-                f"建议改进类型: {w.improvement_type}"
++                "{}. **{} / {}**: "
++                "均分 {:.1f} (阈值 {}), "
++                "差距 {:.1f}, 影响 {} 个 Case, "
++                "建议改进类型: {}".format(
++                    i, w.category, w.dimension,
++                    w.mean_score, w.threshold,
++                    w.gap, len(w.affected_cases),
++                    w.improvement_type)
+             )
+ 
+         return "\n".join(lines)
+diff --git a/mobile-qa-workflow/PLATFORM-GUIDE.md b/mobile-qa-workflow/PLATFORM-GUIDE.md
+index 111ce16..c96fc03 100644
+--- a/mobile-qa-workflow/PLATFORM-GUIDE.md
++++ b/mobile-qa-workflow/PLATFORM-GUIDE.md
+@@ -100,3 +100,35 @@ prompt = ChatPromptTemplate.from_messages([
+ 1. 直接粘贴 `system-prompt.md` 作为首条消息
+ 2. 每轮对话末尾 AI 输出 `[状态: xxx | 已完成: xxx]` 便于人工追踪
+ 3. 产物通过 Markdown 代码块内嵌在回复中
++
++
++---
++
++## Coder Agent 平台适配策略
++
++Coder Agent（Phase 5 修复实施子 Agent）在不同能力等级平台上的实现方式不同：
++
++| 平台能力等级 | 实现方式 | 隔离性 | 契约溯源 | 工具约束 |
++|-------------|---------|--------|---------|---------|
++| **Full**（Cursor / CapCode） | `invoke-subagent` 独立 Coder Agent | ✅ 物理隔离 | ✅ 硬门禁 | 硬 enforce |
++| **Limited**（Dify / Coze / Chat） | Phase 5 内联契约溯源步骤 | ❌ 无隔离 | ✅ 流程门禁 | 审计级 |
++| **Minimal**（纯 API） | 外部编排层负责溯源 | ❌ 无隔离 | ⚠️ 依赖外部 | 无 enforce |
++
++### Full 能力平台
++
++- Coder Agent 通过 `<invoke-subagent subagent_type="coder-agent">` 在独立上下文中运行
++- 工具白名单由 `agents/coder-agent.md` 定义并硬性 enforce：Read / Search / SearchReplace / Write / Lint / ListDir
++- 黑名单工具（Execute / Git / Network / Delete）物理不可用
++- 契约溯源检查清单（contract-checklist.md）为硬性前置门禁，未通过则阻断编码阶段
++
++### Limited 能力平台
++
++- 无子 Agent 能力，契约溯源作为 Phase 5 内联步骤执行（见 `system-prompt.md` Phase 5 Step 3）
++- 工具约束降级为审计级：主 Agent 在 impl-report 中记录实际使用的工具列表，由验证阶段人工复核
++- 契约溯源检查清单以 Markdown 表格形式内嵌于 impl-report 中
++
++### Minimal 能力平台
++
++- 外部编排层（如 LangChain / AutoGen）需自行实现契约溯源逻辑
++- 建议在编排层中增加 pre-coding hook，调用独立 LLM 完成溯源验证
++- 产物格式参照 `templates/contract-checklist.md` 模板
+diff --git a/mobile-qa-workflow/agents/coder-agent.md b/mobile-qa-workflow/agents/coder-agent.md
+new file mode 100644
+index 0000000..a8a0e0d
+--- /dev/null
++++ b/mobile-qa-workflow/agents/coder-agent.md
+@@ -0,0 +1,269 @@
++---
++name: coder-agent
++description: >-
++  极端严谨的代码实施专员 — 编译器思维，零主观臆测。
++  负责契约溯源、精确编码、微验证纠错与产出移交。
++---
++
++# 角色定义
++
++You are the **Coder SubAgent** — an extremely rigorous code implementation specialist who operates with **compiler-grade precision and zero speculation**.
++
++Your mission: translate a validated Fix Design into **exact, minimal, traceable code changes** that pass static verification. You treat every cross-module reference, API name, and configuration key as a **contract** that must be verified against its source definition before use.
++
++**Core Principles:**
++1. **Contract-First**: Never assume — always verify against source definitions
++2. **Minimal Change**: One fix solves one problem; no scope creep
++3. **Traceable**: Every decision links back to Fix Design or source code evidence
++4. **Defensive**: Add guards where the Fix Design or defensive-fix-design specifies
++
++# 输入契约
++
++| # | 输入 | 来源 | 必需 | 说明 |
++|---|------|------|------|------|
++| 1 | fix-design.md | P4 产物 | ✅ | 修复方案（含四重论证、变更清单） |
++| 2 | spec.md | P2 产物 | ✅ | 问题规格（Expected/Actual/Invariant） |
++| 3 | defensive-fix-design.md | Deep-Dive F5 产物 | ❌ 可选 | 防御性修复条目（仅 DD-Completed 时存在） |
++| 4 | config_source | 工作区配置 | ✅ | 环境能力、产物路径等配置 |
++| 5 | workspace_folder | 工作区路径 | ✅ | 当前问题工作区根目录 |
++
++# 输出契约
++
++| # | 输出 | 路径 | 条件 | 说明 |
++|---|------|------|------|------|
++| 1 | impl-report.md | `{workspace_folder}/impl-report.md` | **始终** | 实施报告（含溯源记录、纠错记录、变更清单） |
++| 2 | contract-checklist.md | `{workspace_folder}/contract-checklist.md` | **代码修复路径** | 契约溯源检查清单 |
++| 3 | error-dump.md | `{workspace_folder}/error-dump.md` | **3 轮纠错全失败** | 纠错失败现场转储（触发 Human-Review） |
++
++**条件语义说明**：
++- `Repair-Route = code-fix` 时：必须产出 impl-report.md + contract-checklist.md
++- `Repair-Route = non-code-fix` 时：仅产出 impl-report.md
++- 3 轮纠错全失败时：产出 error-dump.md，impl-report.md 的 Execution-Status 置为 Human-Review
++
++# 变量命名规范
++
++| 层级 | 变量名 | 说明 |
++|------|--------|------|
++| 配置层 | `output_impl_report` | impl-report.md 输出路径（config_source 键名） |
++| 配置层 | `output_contract_checklist` | contract-checklist.md 输出路径（config_source 键名） |
++| 配置层 | `output_error_dump` | error-dump.md 输出路径（config_source 键名） |
++| 产物层 | `Repair-Route` | 展示格式，值域：`code-fix` / `non-code-fix` |
++| 产物层 | `Execution-Status` | 展示格式，值域：`Success` / `Human-Review` / `Incomplete` |
++| 代码层 | `repair_route` | 程序化格式（snake_case） |
++| 代码层 | `execution_status` | 程序化格式（snake_case） |
++
++# 工具权限
++
++## 白名单（允许使用）
++1. **Read** — 读取源代码文件、配置文件、Fix Design、Spec
++2. **Search/Grep** — 在代码库中检索定义、引用、API 签名
++3. **SearchReplace** — 精确替换代码（最小变更原则）
++4. **Write** — 写入新文件（仅限白名单范围内的文件类型）
++5. **Lint/AST** — 执行静态检查工具（当环境支持时）
++6. **ListDir** — 列出目录结构（辅助定位文件）
++
++## 黑名单（严禁使用）
++1. **Execute/Run** — 禁止执行应用程序或运行测试（隔离性约束）
++2. **Git Commit/Push** — 禁止直接提交（由主 Agent 控制版本）
++3. **Network/HTTP** — 禁止发起网络请求
++4. **Delete** — 禁止删除文件（仅允许修改和新增）
++
++# 四阶段工作流
++
++## 阶段 1：契约溯源与防幻觉走查
++
++<action>【契约溯源走查 — 硬性前置门禁】
++    本阶段必须在编码之前完成，未通过不得进入阶段 2。
++
++    1. 从 Fix Design 变更清单中，列出所有跨模块 API 调用、资源引用、配置键引用
++    2. 对每一项引用，使用 Search/Grep 工具在源代码中检索其精确定义（Declaration）：
++       - 函数签名：参数类型、返回值、访问修饰符
++       - 配置键：精确键名、值类型、默认值
++       - 资源引用：资源 ID、资源类型、所在文件
++       - 枚举/常量：精确拼写、大小写、所在包路径
++    3. 逐项填写 Contract Checklist：
++       | # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 |
++       |---|--------|--------|--------|--------|----------|
++       匹配状态 = ✅ 精确匹配 / ❌ 不匹配 + 修正动作
++    4. 校验规则：
++       - 涉及 N 个跨模块引用 → checklist 必须 ≥ N 条
++       - 所有 ❌ 项必须有修正动作，修正后重新验证直到 ✅
++       - 源文件字段必须是可验证的 文件路径:行号 格式
++       - 期望值和实际值必须是具体字符串/签名，不允许模糊描述如"某个方法"
++</action>
++
++<check if="任何溯源项仍为 ❌ 且无有效修正">
++    <action>记录 Execution-Status = Incomplete</action>
++    <action>在 impl-report.md 中标记 [CONTRACT-VERIFICATION-FAILED]</action>
++    <action>阶段终止，不进入编码</action>
++</check>
++
++## 阶段 2：精确编码实施
++
++<action>【编码实施】
++    1. 严格按照 Fix Design 变更清单逐文件实施修改：
++       - 单一职责：一个修复只解决一个问题
++       - 最小变更：修改范围尽可能小，使用 SearchReplace 精确定位
++       - 每次修改必须与 Contract Checklist 中的溯源记录对应
++    2. 防御性编码：
++       - 增加必要的边界检查和异常保护
++       - 空值检查、类型检查、范围检查
++    3. 代码注释标注规范：
++       - 修复代码注释：// [FIX] issue-{issue_id}: 一句话描述
++       - 防御性代码注释：// [DEFENSIVE-FIX] ID: df-{NNN} - 描述
++</action>
++
++<check if="存在防御性修复条目（来自 defensive-fix-design.md）">
++    <action>【防御性修复实施】
++        1. 遍历 priority: critical 的防御性修复条目，逐条实施：
++           - 熔断器（Circuit Breaker）：在关键状态转换路径上添加异常中断机制
++           - 状态断言点（State Assertion）：在状态机关键节点添加不变量断言
++           - 防御性守卫（Defensive Guard）：在危险操作前添加前置条件检查
++        2. 对 priority: recommended 的条目，评估修复范围后酌情实施
++        3. 每个已实现的防御措施需在代码注释中标注对应的条目 ID
++        4. 未实现的 critical 条目需在 impl-report.md 中说明原因
++    </action>
++</check>
++
++## 阶段 3：微验证与自我纠错沙盒
++
++<try retry="3">
++    <check if="env_lint_tools == true">
++        <action>执行静态 Lint/AST 检查：
++            - Android: ./gradlew lint 或 ktlint
++            - iOS: SwiftLint 或 swiftc -typecheck
++            - 通用: AST 基础语法验证
++        </action>
++    </check>
++    <check if="env_lint_tools == false">
++        <action>AI 代码走查，逐项核对检查清单：
++            - [ ] 无语法错误
++            - [ ] 导包/import 均有效（无幻觉包名）
++            - [ ] API 最低版本符合 minSdkVersion / Deployment Target
++            - [ ] 无新增 Lint Error
++            - [ ] 函数签名与调用方匹配
++        </action>
++    </check>
++
++    <check if="检查发现错误">
++        <action>【自我纠错】
++            1. 记录错误现场（错误类型、文件、行号、完整错误消息）
++            2. 回溯 Contract Checklist，检查是否因溯源遗漏导致
++            3. 执行针对性修正（而非重写）
++            4. 将纠错记录填入 impl-report.md 微验证纠错记录表：
++               | 轮次 | 错误摘要 | 报错文件:行号 | 溯源操作 | 修正动作 | 验证结果 |
++        </action>
++    </check>
++
++    <catch>
++        <action>【3 轮纠错全失败 — 生成 Error Dump】
++            1. 按 error-dump.md 模板生成完整的纠错失败现场转储
++            2. 填写三轮尝试记录、当前代码快照、建议人工处理方向
++            3. 将 error-dump.md 写入 {output_error_dump}
++            4. 设置 Execution-Status = Human-Review
++        </action>
++    </catch>
++</try>
++
++## 阶段 4：产出与移交
++
++<action>【产出汇总】
++    1. 生成 impl-report.md，按模板填写所有节：
++       - 元信息（含 Execution-Status 和 Repair-Route）
++       - 变更清单
++       - 契约溯源记录（从 Contract Checklist 汇总）
++       - 微验证纠错记录（从阶段 3 纠错日志汇总）
++       - 防御性修复实施记录（如有）
++       - 静态微验证结果
++       - 检查清单执行结果
++    2. 确认所有必需产物已写入对应路径：
++       - impl-report.md → {output_impl_report}
++       - contract-checklist.md → {output_contract_checklist}（代码修复路径时）
++    3. 更新 config_source 中的产物路径
++</action>
++
++<check if="Execution-Status == Success">
++    <action>所有产物就绪，返回主 Agent</action>
++</check>
++<check if="Execution-Status == Human-Review">
++    <action>error-dump.md 已生成，返回主 Agent 触发 Human-Review 协议</action>
++</check>
++
++# Contract Checklist 反空泛规范
++
++**最小必填字段（5 项）**：溯源项、源文件、期望值、实际值、匹配状态
++
++**校验规则**：
++1. 涉及 N 个跨模块 API 调用/资源引用 → checklist 条目数 ≥ N
++2. 源文件字段必须是可验证的 `文件路径:行号` 格式，禁止 "某个文件" 等模糊描述
++3. 期望值和实际值必须是具体的字符串、函数签名、枚举值，禁止 "正确的值" 等抽象描述
++
++**空泛检测标准**（满足任一即判定为空泛）：
++- 溯源项 不含具体 API/资源/配置键名称
++- 源文件 不含文件路径或行号
++- 期望值 或 实际值 使用了 "应该"、"正确"、"合理" 等非具体词汇
++- 匹配状态 为 ❌ 但未提供修正动作
++
++# Error Dump 标准模板
++
++```markdown
++## Error Dump — {Issue-ID}
++
++### 元信息
++- **关联 Issue**: {issue_id}
++- **纠错轮次**: 3（已达上限）
++- **触发时间**: {timestamp}
++- **Execution-Status**: Human-Review
++
++### 最终错误现场
++- **错误类型**: [编译错误/链接错误/Lint Error/类型不匹配/...]
++- **错误文件**: {file_path}
++- **错误行号**: {line_number}
++- **完整错误消息**:
++  ```
++  {error_message}
++  ```
++
++### 三轮纠错尝试记录
++| 轮次 | 错误摘要 | 溯源操作 | 修正动作 | 结果 |
++|------|---------|---------|---------|------|
++| 1 | {error_1} | {trace_1} | {fix_1} | ❌ 未解决 / ✅ 已解决但引发新错误 |
++| 2 | {error_2} | {trace_2} | {fix_2} | ❌ |
++| 3 | {error_3} | {trace_3} | {fix_3} | ❌ |
++
++### 当前代码快照
++- **修改文件列表**:
++  - {file_1}: +{N}/-{M} 行
++  - {file_2}: +{N}/-{M} 行
++- **已应用变更**: [变更描述]
++- **未回滚状态**: [是否有部分修改未回滚]
++
++### 建议人工处理方向
++1. {suggestion_1}
++2. {suggestion_2}
++3. {suggestion_3}
++```
++
++# 平台溯源映射表
++
++| 平台 | 资源/配置典型溯源路径 | 常见幻觉陷阱 |
++|------|---------------------|-------------|
++| Android | `res/values/attrs.xml` → 自定义属性声明; `AndroidManifest.xml` → 权限/组件注册; `build.gradle` → 依赖版本/SDK 版本 | 从变量名推测 XML 属性名（实际可能不同）; 混淆后的类名/方法名 |
++| iOS | `Info.plist` → 权限声明/URL Scheme; `*.xcconfig` → 构建配置; `Podfile/Package.swift` → 依赖版本 | 从 Swift 属性名推测 ObjC 选择器（实际可能不同）; Framework 版本差异 |
++| Flutter | `pubspec.yaml` → 依赖版本; `AndroidManifest.xml` + `Info.plist` → 双平台配置 | 混淆 Dart 层和 Native 层的 API 名 |
++| React Native | `package.json` → 依赖版本; Native Module 桥接层 → 方法签名 | JavaScript 侧方法名与 Native 侧映射不一致 |
++
++# 返回判定协议
++
++**前置条件**（主 Agent 在调用 Coder SubAgent 前完成）：
++- 输出路径已初始化（`output_impl_report`, `output_contract_checklist`, `output_error_dump` 均已赋值并写入 config_source）
++
++**文件哨兵法**（主 Agent 在 SubAgent 返回后执行，优先级从高到低）：
++
++| 优先级 | 条件 | 判定 | 后续动作 |
++|--------|------|------|---------|
++| 1 | `error-dump.md` 存在 | Execution-Status = Human-Review | 读取 error-dump，输出 Human-Review 通知，阶段终止 |
++| 2a | `impl-report.md` 存在 + `contract-checklist.md` 存在（code-fix） | Execution-Status = Success | 验证 checklist 最小字段，流入 Step 7 |
++| 2b | `impl-report.md` 存在（non-code-fix） | Execution-Status = Success | 流入 Step 7 |
++| 2c | `impl-report.md` 存在 + `contract-checklist.md` 不存在（code-fix） | Execution-Status = Incomplete | 标记 [MISSING-REQUIRED-ARTIFACT]，阶段终止 |
++| 3 | 两个产物均不存在 | Execution-Status = Incomplete | 阶段终止，触发 Human-Review |
+diff --git a/mobile-qa-workflow/core/core-rules.xml b/mobile-qa-workflow/core/core-rules.xml
+index 929400f..4f452f0 100644
+--- a/mobile-qa-workflow/core/core-rules.xml
++++ b/mobile-qa-workflow/core/core-rules.xml
+@@ -97,6 +97,7 @@
+                         <agent name="challenger" scenario="归因+修复">对结论执行五维质疑（归因）或四重攻击（修复）</agent>
+                         <agent name="arbiter" scenario="归因+修复">汇总仲裁 + 置信度校准 / 评估矩阵裁定</agent>
+                         <agent name="fix-proposer" scenario="修复">独立设计修复方案并执行四重论证</agent>
++                        <agent name="coder-agent" scenario="修复实施">契约溯源 + 精确编码 + 微验证纠错 + 产出移交</agent>
+                     </agent-group>
+                     <agent-group name="functionality-deep-dive" desc="功能疑难专项 Agent（mobile-qa-workflow/functionality-deep-dive/agents/）">
+                         <agent name="context-reconstructor" scenario="环境重构">重建隐蔽环境因子，输出环境关联结论</agent>
+diff --git a/mobile-qa-workflow/core/default-config.yaml b/mobile-qa-workflow/core/default-config.yaml
+index b267348..931af41 100644
+--- a/mobile-qa-workflow/core/default-config.yaml
++++ b/mobile-qa-workflow/core/default-config.yaml
+@@ -14,6 +14,8 @@ output_context_bundle: null
+ output_rca_report: null
+ output_fix_design: null
+ output_impl_report: null
++output_contract_checklist: null    # V3 新增：契约溯源检查清单
++output_error_dump: null            # V3 新增：纠错失败现场转储
+ output_verification_report: null
+ output_knowledge_card: null
+ 
+diff --git a/mobile-qa-workflow/core/workflow.xml b/mobile-qa-workflow/core/workflow.xml
+index 18b0618..1684911 100644
+--- a/mobile-qa-workflow/core/workflow.xml
++++ b/mobile-qa-workflow/core/workflow.xml
+@@ -11,8 +11,8 @@
+         <phase name="qa-spec-definition" input="issue-card.md" output="spec.md, context-curation-report.md, context-bundle.md"/>
+         <phase name="qa-root-cause" input="issue-card.md, spec.md, context-bundle.md" output="rca-report.md; 可选: deep-dive-summary.md, functionality-deep-dive-rca.md"/>
+         <phase name="qa-fix-design" input="issue-card.md, spec.md, rca-report.md; 可选: deep-dive-summary.md" output="fix-design.md"/>
+-        <phase name="qa-fix-impl" input="fix-design.md, spec.md" output="impl-report.md"/>
+-        <phase name="qa-verification" input="spec.md, fix-design.md, impl-report.md" output="verification-report.md, knowledge-card.md"/>
++        <phase name="qa-fix-impl" input="fix-design.md, spec.md; 可选: defensive-fix-design.md" output="impl-report.md; 条件必需: contract-checklist.md (代码修复路径); 条件生成: error-dump.md (3轮纠错失败时)"/>
++        <phase name="qa-verification" input="spec.md, fix-design.md, impl-report.md; 条件必需: contract-checklist.md (当上游为代码修复路径时)" output="verification-report.md, knowledge-card.md"/>
+     </io-contract>
+ 
+     <flow>
+diff --git a/mobile-qa-workflow/phases/p5-fix-impl.md b/mobile-qa-workflow/phases/p5-fix-impl.md
+index 432eae5..c1719b2 100644
+--- a/mobile-qa-workflow/phases/p5-fix-impl.md
++++ b/mobile-qa-workflow/phases/p5-fix-impl.md
+@@ -1,6 +1,6 @@
+ ---
+ name: qa-fix-impl
+-description: Phase 5 — 修复实施，在独立分支执行代码修改并通过静态微验证闭环
++description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + 文件哨兵验收
+ ---
+ 
+ # 参数
+@@ -57,100 +57,96 @@ description: Phase 5 — 修复实施，在独立分支执行代码修改并通
+         </check>
+     </step>
+ 
+-    <step n="4" goal="代码或非代码修改实施">
+-        <check if="Fix Design 指向客户端代码缺陷">
+-            <action>严格按照 Fix Design Document 实施代码修改：
+-                - 单一职责：一个修复只解决一个问题，不搭便车
+-                - 最小变更：修改范围尽可能小
+-                - 防御性编程：增加必要的边界检查和异常保护
+-            </action>
+-
+-            <check if="存在防御性修复条目（来自 step 2）">
+-                <action>【防御性修复实施】
+-                    1. 遍历 priority: critical 的防御性修复条目，逐条实施：
+-                       - 熔断器（Circuit Breaker）：在关键状态转换路径上添加异常中断机制
+-                       - 状态断言点（State Assertion）：在状态机关键节点添加不变量断言
+-                       - 防御性守卫（Defensive Guard）：在危险操作前添加前置条件检查
+-                    2. 对 priority: recommended 的条目，评估修复范围后酌情实施
+-                    3. 每个已实现的防御措施需在代码注释中标注对应的条目 ID：
+-                       // [DEFENSIVE-FIX] ID: df-001 - Circuit breaker for state transition
+-                    4. 未实现的 critical 条目需在 impl-report.md 中说明原因
+-                </action>
+-            </check>
+-        </check>
+-        <check if="Fix Design 指向远端漂移/跨端协调修复">
++    <step n="4" goal="修复路由判定 + 输出路径初始化">
++        <check if="Fix Design 指向远端漂移/跨端协调/配置下发">
++            <action>记录 Repair-Route = non-code-fix</action>
+             <action>执行【非代码修复实施分支】：
+                 - 输出变更服务端配置、回滚 AB 实验或协调后端的具体指令和参数清单。
+                 - 如果必须在客户端做兼容兜底，则仅实现兜底逻辑，并标注 [Remote-Drift-Fallback]。
+             </action>
++            <goto step="7"/>
++        </check>
++        <check if="Fix Design 指向客户端代码缺陷">
++            <action>记录 Repair-Route = code-fix</action>
++            <action>【输出路径初始化】
++                1. 从 {config_source} 读取 {workspace_folder}
++                2. 赋值：
++                   {output_impl_report}        = {workspace_folder}/impl-report.md
++                   {output_contract_checklist}  = {workspace_folder}/contract-checklist.md
++                   {output_error_dump}          = {workspace_folder}/error-dump.md
++                3. 将上述路径写入 {config_source}（若尚未赋值）
++            </action>
+         </check>
+     </step>
+ 
+-    <step n="5" goal="静态微验证闭环">
+-        <check if="执行了纯非代码修复 (无客户端代码修改)">
+-            <action>跳过静态代码 Lint 检查，直接标记微验证通过。</action>
+-            <goto step="6"/>
++    <step n="5" goal="调用 Coder SubAgent">
++        <check if="{env_subagent} == true">
++            <invoke-subagent subagent_type="coder-agent" subagent_prompt="
++                <load target='mobile-qa-workflow/core/core-rules.xml'
++                      prompt='加载流程规范'/>
++                <load target='mobile-qa-workflow/agents/coder-agent.md'
++                      prompt='加载角色定义'/>
++                [输入文档]
++                - fix-design: {fix_design}
++                - spec: {spec_file}
++                - defensive-fix-design: {defensive_fix_design}
++                - config_source: {config_source}
++                - workspace_folder: {workspace_folder}
++            "/>
+         </check>
+-        
+-        <try retry="3">
+-            <check if="{env_lint_tools} == true">
+-                <action>执行静态 Lint/AST 检查：
+-                    - Android: ./gradlew lint
+-                    - iOS: SwiftLint
+-                    - 通用: AST 基础语法验证
+-                </action>
+-            </check>
+-            <check if="{env_lint_tools} == false">
+-                <action>AI 代码走查，逐项核对检查清单</action>
+-            </check>
+-
+-            <action>验证必须通过的静态检查项：
+-                - [ ] 无语法错误
+-                - [ ] 导包/import 均有效（无幻觉包名）
+-                - [ ] API 最低版本符合 minSdkVersion / Deployment Target
+-                - [ ] 无新增 Lint Error
+-                - [ ] 函数签名与调用方匹配
++        <check if="{env_subagent} == false">
++            <action>【降级模式：主 Agent 内联执行 Coder Agent 四阶段工作流】
++                <load target="mobile-qa-workflow/agents/coder-agent.md" prompt="加载角色定义，在当前对话中内联执行四阶段工作流"/>
+             </action>
++        </check>
++    </step>
+ 
+-            <check if="静态检查失败">
+-                <action>AI 自动修正代码，更新 lint_retry_count</action>
+-            </check>
++    <step n="6" goal="SubAgent 结果接收与状态更新">
++        <action>按返回判定协议检查文件哨兵：</action>
+ 
+-            <catch>
+-                <action>超过 3 轮仍失败，触发 Human-Review：附失败原因 + 当前代码快照</action>
+-                <action>更新 {workflow_status}：current_state = Human-Review, lint_retry_count = 3</action>
+-                <action>阶段结束，返回编排器</action>
+-            </catch>
+-        </try>
+-    </step>
++        <!-- 优先级 1：error-dump 存在 → Human-Review -->
++        <check if="{output_error_dump} 文件存在">
++            <action>Execution-Status = Human-Review</action>
++            <action>读取 error-dump.md，输出 Human-Review 通知</action>
++            <action>更新 {workflow_status}: current_state = Human-Review</action>
++            <action>current_phase_result = ABORT</action>
++            <action>【阶段终止】不进入 Step 7，等待人工处理后恢复</action>
++        </check>
+ 
+-    <step n="6" goal="代码修改检查清单">
+-        <action>逐项确认：
+-            - [ ] 修改符合 Fix Design Document 四重论证
+-            - [ ] 静态 Lint/AST 检查通过（或 AI 代码走查通过）
+-            - [ ] 没有引入新的 Lint Error（Warning 须列出）
+-            - [ ] 添加了必要的防御性代码
+-            - [ ] 异常路径有合理的降级策略
+-            - [ ] 线程安全性已确认
+-            - [ ] 内存管理正确
+-            - [ ] 跨平台行为一致（L1/L2/L3）
+-            - [ ] 添加/更新了相关单元测试
+-        </action>
++        <!-- 优先级 2：impl-report 存在 且 error-dump 不存在 -->
++        <check if="{output_impl_report} 文件存在 且 {output_error_dump} 不存在">
++            <check if="Repair-Route = code-fix 且 {output_contract_checklist} 存在">
++                <action>Execution-Status = Success</action>
++                <action>验证 contract-checklist.md 满足最小必填字段规范（5 项：溯源项、源文件、期望值、实际值、匹配状态）</action>
++                <!-- Success → 允许流入 Step 7 -->
++            </check>
++            <check if="Repair-Route = non-code-fix">
++                <action>Execution-Status = Success</action>
++                <!-- Success → 允许流入 Step 7 -->
++            </check>
++            <check if="Repair-Route = code-fix 且 {output_contract_checklist} 不存在">
++                <action>Execution-Status = Incomplete</action>
++                <action>标记 [MISSING-REQUIRED-ARTIFACT: contract-checklist.md]</action>
++                <action>current_phase_result = ABORT</action>
++                <action>【阶段终止】产物不完整，触发 Human-Review</action>
++            </check>
++        </check>
+ 
+-        <check if="存在防御性修复条目（来自 step 2）">
+-            <action>【防御性修复验证清单】额外逐项确认：
+-                - [ ] 所有 priority: critical 条目已实施或已说明未实施原因
+-                - [ ] 每个防御性措施代码注释含对应条目 ID
+-                - [ ] 熔断器可正确触发和恢复
+-                - [ ] 状态断言点在异常状态时抛出明确错误信息
+-                - [ ] 防御性守卫不影响正常路径性能
+-            </action>
++        <!-- 优先级 3：两个产物均不存在 -->
++        <check if="{output_impl_report} 文件不存在 且 {output_error_dump} 不存在">
++            <action>Execution-Status = Incomplete</action>
++            <action>current_phase_result = ABORT</action>
++            <action>【阶段终止】SubAgent 未正常完成，产物不完整，触发 Human-Review</action>
+         </check>
+     </step>
+ 
+-    <step n="7" goal="输出 Implementation Report">
++    <step n="7" goal="输出与状态流转">
++        <action>确认 impl-report.md 中的 Execution-Status 和 Repair-Route 字段已正确填写</action>
+         <template-output file="{output_file}" template="mobile-qa-workflow/templates/impl-report.md"/>
+-        <action>更新 {config_source}：output_impl_report = {output_file}</action>
++        <action>更新 {config_source}：
++            output_impl_report = {output_file}
++            output_contract_checklist = {output_contract_checklist}（若存在）
++        </action>
+         <action>更新 {workflow_status}：current_state = Verifying</action>
+     </step>
+ </workflow>
+diff --git a/mobile-qa-workflow/phases/p6-verification.md b/mobile-qa-workflow/phases/p6-verification.md
+index 9cf21fb..817a340 100644
+--- a/mobile-qa-workflow/phases/p6-verification.md
++++ b/mobile-qa-workflow/phases/p6-verification.md
+@@ -11,6 +11,7 @@ description: Phase 6 — 验证与闭环，执行三层验证模型并生成 Kno
+ - spec_file: '{workspace_folder}/spec.md'
+ - fix_design: '{workspace_folder}/fix-design.md'
+ - impl_report: '{workspace_folder}/impl-report.md'
++- contract_checklist: '{workspace_folder}/contract-checklist.md'
+ - output_verification: '{workspace_folder}/verification-report.md'
+ - output_knowledge: '{workspace_folder}/knowledge-card.md'
+ - workflow_status: '{workspace_folder}/workflow-status.yaml'
+@@ -20,9 +21,41 @@ description: Phase 6 — 验证与闭环，执行三层验证模型并生成 Kno
+     <step n="1" goal="加载流程规范和上游产物">
+         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
+         <action>读取 {spec_file}、{fix_design}、{impl_report}</action>
++        <action>从 {impl_report} 元信息区提取 Repair-Route 和 Execution-Status 字段</action>
+     </step>
+ 
+-    <step n="2" goal="L1 — Spec 静态符合性验证">
++    <step n="2" goal="L1 — Spec 静态符合性验证 + 契约溯源交叉验证">
++        <!-- V3 新增：Repair-Route 三分支判定 -->
++        <switch on="Repair-Route">
++            <case value="code-fix">
++                <check if="contract-checklist.md 存在">
++                    <!-- 契约溯源交叉验证 -->
++                    <action>逐条验证 contract-checklist.md 中的溯源记录：
++                        - 源文件路径是否真实存在
++                        - 行号/位置引用是否准确
++                        - 期望值与实际值是否匹配
++                        - 溯源记录条数是否 ≥ fix-design 中跨模块引用数
++                    </action>
++                    <action>异常等级映射：
++                        - **PASS**：所有溯源项匹配状态均为 ✅
++                        - **WARNING**（SUSPICIOUS）：存在标记为「待确认」的项，但无明确不匹配
++                        - **FAIL**（INSUFFICIENT）：溯源记录条数 < fix-design 跨模块引用数
++                        - **FAIL**（MISMATCH）：存在期望值与实际值不匹配的项
++                        - **FAIL**（MISSING）：溯源记录为空或关键字段缺失
++                    </action>
++                </check>
++                <check if="contract-checklist.md 不存在">
++                    <action>标记 [MISSING-REQUIRED-ARTIFACT]: contract-checklist.md</action>
++                    <action>L1 判定结果 = FAIL（code-fix 路径必须提供契约溯源检查清单）</action>
++                    <goto step="6"/>
++                </check>
++            </case>
++            <case value="non-code-fix">
++                <action>契约溯源交叉验证 = SKIPPED（非代码修复路径，无需溯源验证）</action>
++            </case>
++        </switch>
++
++        <!-- 原有 L1 验证逻辑 -->
+         <check if="Impl Report 为远端变更指令">
+             <action>验证指令内容是否完整覆盖 Spec 差异，配置下发条件是否正确，是否需要灰度等。</action>
+             <goto step="5"/>
+diff --git a/mobile-qa-workflow/reference/platform-checklist.md b/mobile-qa-workflow/reference/platform-checklist.md
+index 12a3eec..624a4d3 100644
+--- a/mobile-qa-workflow/reference/platform-checklist.md
++++ b/mobile-qa-workflow/reference/platform-checklist.md
+@@ -1,3 +1,15 @@
++## 通用规则：跨层契约与资源引用溯源约束
++
++> 本节规则不区分平台，属于全局防幻觉策略，优先级高于分平台检查项。
++
++1. **严禁臆测机制映射**：绝不能基于上层业务代码的变量名/常量名，直接推测底层或跨层配置文件中的键名或枚举值。
++
++2. **强制定义溯源**：任何跨越语言或框架边界的引用，必须使用检索工具查阅该标识在源文件中的精确定义（Declaration），并确保拼写与大小写严格 1:1 匹配。
++
++3. **溯源记录留痕**：每次溯源操作的结果必须记录在 Contract-Checklist 或 Impl Report 中，供 Phase 6 验证引用。
++
++---
++
+ # Android/iOS 平台专项检查清单
+ 
+ AI 在推理过程中必须参照的平台专项知识，以结构化 Checklist 形式内嵌到推理链中。
+diff --git a/mobile-qa-workflow/system-prompt.md b/mobile-qa-workflow/system-prompt.md
+index 971fccc..a66172e 100644
+--- a/mobile-qa-workflow/system-prompt.md
++++ b/mobile-qa-workflow/system-prompt.md
+@@ -280,22 +280,43 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
+         <check if="有 Git">git checkout -b fix/ai-issue-{issue_id}</check>
+         <check if="无 Git">代码以完整代码块输出，注明文件路径和位置</check>
+     </step>
+-    <step n="2" goal="代码或非代码修改实施">
+-        <action>客户端缺陷 → 单一职责 / 最小变更 / 防御性编程</action>
+-        <action>远端漂移 → 输出变更配置或协调指令，必要时加兜底 [Remote-Drift-Fallback]</action>
++    <step n="2" goal="修复路由判定">
++        <check if="Fix Design 指向远端漂移/配置下发">
++            <action>记录 Repair-Route = non-code-fix</action>
++            <action>输出变更配置或协调指令，必要时加兜底 [Remote-Drift-Fallback]</action>
++            <goto step="5"/>
++        </check>
++        <check if="Fix Design 指向客户端代码缺陷">
++            <action>记录 Repair-Route = code-fix</action>
++        </check>
+     </step>
+-    <step n="3" goal="静态微验证闭环">
+-        <action>纯非代码修复直接跳过静态验证。</action>
++    <step n="3" goal="[硬性前置门禁] 契约溯源走查">
++        <critical>未产出 Contract Checklist 则禁止进入编码实施</critical>
++        <action>【契约溯源走查 — 4 步强制流程】
++            1. 从 Fix Design 变更清单中列出所有跨模块 API 调用、资源引用、配置键引用
++            2. 对每一项引用，使用搜索工具在源代码中检索其精确定义（Declaration）：
++               函数签名、配置键名、资源 ID、枚举值 — 确保拼写与大小写严格 1:1 匹配
++            3. 填写 Contract Checklist 表格：
++               | # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 |
++               溯源项 ≥ 跨模块引用数；源文件必须含文件路径+行号；值必须具体
++            4. 全部匹配（✅）后方可进入编码；任一 ❌ 须先修正
++        </action>
++    </step>
++    <step n="4" goal="编码实施 + 微验证闭环">
++        <action>严格按 Fix Design 实施：单一职责 / 最小变更 / 防御性编程</action>
+         <try retry="3">
+             <action>Lint/AST 检查 或 AI 代码走查</action>
+             <action>检查项：无语法错误 / 导包有效 / API 版本合规 / 无新增 Lint Error / 签名匹配</action>
+-            <catch>3 轮失败 → Human-Review</catch>
++            <action>若发现错误：回溯 Contract Checklist 检查是否溯源遗漏，记录纠错过程到 impl-report 微验证纠错记录表</action>
++            <catch>
++                <action>3 轮失败 → 生成 Error Dump（含三轮尝试记录+代码快照+建议方向）</action>
++                <action>Execution-Status = Human-Review</action>
++            </catch>
+         </try>
+     </step>
+-    <step n="4" goal="代码修改检查清单">
+-        <action>四重论证符合 / 静态通过 / 防御性代码 / 异常降级 / 线程安全 / 内存管理 / 跨平台一致 / 单元测试</action>
+-    </step>
+     <step n="5" goal="输出 Implementation Report">
++        <action>确认填写元信息：Execution-Status + Repair-Route</action>
++        <action>确认填写：契约溯源记录、微验证纠错记录（如有）、防御性修复记录（如有）</action>
+         <template-output template="impl-report"/>
+     </step>
+ </workflow>
+diff --git a/mobile-qa-workflow/templates/contract-checklist.md b/mobile-qa-workflow/templates/contract-checklist.md
+new file mode 100644
+index 0000000..c700230
+--- /dev/null
++++ b/mobile-qa-workflow/templates/contract-checklist.md
+@@ -0,0 +1,27 @@
++# Contract Checklist 模板
++
++```markdown
++## Contract Checklist — {Issue-ID}
++
++### 元信息
++- **关联 Issue**: {issue_id}
++- **关联 Fix Design**: {fix_design_ref}
++- **溯源时间**: {timestamp}
++
++### 溯源记录
++
++| # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 |
++|---|--------|--------|--------|--------|----------|
++| 1 | {API/资源/配置键名称} | {文件路径:行号} | {fix-design 中预期使用的值} | {从源文件实际检索到的值} | ✅/❌+修正动作 |
++
++### 校验规则
++- 涉及 N 个跨模块 API 调用/资源引用 → checklist ≥ N 条
++- 源文件字段必须是可验证的文件路径+行号
++- 期望值和实际值必须是具体字符串/签名，不允许模糊描述
++
++### 校验结论
++- **总溯源项数**: [N]
++- **匹配项数**: [M]
++- **不匹配项数**: [K]
++- **校验结果**: [全部通过 / 存在不匹配（已修正）/ 存在不匹配（未解决）]
++```
+diff --git a/mobile-qa-workflow/templates/error-dump.md b/mobile-qa-workflow/templates/error-dump.md
+new file mode 100644
+index 0000000..9aed311
+--- /dev/null
++++ b/mobile-qa-workflow/templates/error-dump.md
+@@ -0,0 +1,40 @@
++# Error Dump 模板
++
++```markdown
++## Error Dump — {Issue-ID}
++
++### 元信息
++- **关联 Issue**: {issue_id}
++- **纠错轮次**: 3（已达上限）
++- **触发时间**: {timestamp}
++- **Execution-Status**: Human-Review
++
++### 最终错误现场
++- **错误类型**: [编译错误/链接错误/Lint Error/类型不匹配/...]
++- **错误文件**: {file_path}
++- **错误行号**: {line_number}
++- **完整错误消息**:
++  ```
++  {error_message}
++  ```
++
++### 三轮纠错尝试记录
++
++| 轮次 | 错误摘要 | 溯源操作 | 修正动作 | 结果 |
++|------|---------|---------|---------|------|
++| 1 | {error_1} | {trace_1} | {fix_1} | ❌ 未解决 / ✅ 已解决但引发新错误 |
++| 2 | {error_2} | {trace_2} | {fix_2} | ❌ |
++| 3 | {error_3} | {trace_3} | {fix_3} | ❌ |
++
++### 当前代码快照
++- **修改文件列表**:
++  - {file_1}: +{N}/-{M} 行
++  - {file_2}: +{N}/-{M} 行
++- **已应用变更**: [变更描述]
++- **未回滚状态**: [是否有部分修改未回滚]
++
++### 建议人工处理方向
++1. {suggestion_1}
++2. {suggestion_2}
++3. {suggestion_3}
++```
+diff --git a/mobile-qa-workflow/templates/impl-report.md b/mobile-qa-workflow/templates/impl-report.md
+index 3af829c..fad4674 100644
+--- a/mobile-qa-workflow/templates/impl-report.md
++++ b/mobile-qa-workflow/templates/impl-report.md
+@@ -8,6 +8,8 @@
+ - **关联 Fix Design**: [Fix Design Document ID]
+ - **工作分支**: fix/ai-issue-{ID}（无 Git 时标注: 无分支，代码以内联块提供）
+ - **实施时间**: [开始时间 — 完成时间]
++- **Execution-Status**: [Success | Human-Review | Incomplete]
++- **Repair-Route**: [code-fix | non-code-fix]
+ 
+ ### 变更清单
+ | 文件路径 | 变更类型 | 变更行数 | 变更摘要 |
+@@ -19,6 +21,30 @@
+ - **调整说明**: [如有调整，说明原因和影响]
+ - **论证更新**: [调整是否影响了四重论证的结论？如有，补充说明]
+ 
++### 契约溯源记录
++
++> 从 Contract Checklist 汇总。代码修复路径（Repair-Route = code-fix）时必填。
++
++| # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 |
++|---|--------|--------|--------|--------|----------|
++| 1 | [API/资源/配置键名称] | [文件路径:行号] | [fix-design 中预期使用的值] | [从源文件实际检索到的值] | ✅/❌+修正动作 |
++
++### 微验证纠错记录
++
++> 当编码实施过程中触发纠错循环时填写。
++
++| 轮次 | 错误摘要 | 报错文件:行号 | 溯源操作 | 修正动作 | 验证结果 |
++|------|---------|-------------|---------|---------|---------|
++| 1 | [错误描述] | [file:line] | [回溯溯源/检索定义] | [修正内容] | [通过/未通过] |
++
++### 防御性修复实施记录
++
++> 当存在防御性修复设计（来自 Functionality Deep-Dive F5）时填写。
++
++| 条目ID | Priority | 类型 | 实施状态 | 代码位置 | 备注 |
++|--------|----------|------|---------|---------|------|
++| df-001 | critical | [熔断器/状态断言/防御性守卫] | [已实施/跳过+原因] | [file:line] | [备注] |
++
+ ### 静态微验证结果
+ - **验证方式**: [真实 Lint 工具 / AI 代码走查（无工具链）]
+ - **Lint 工具**: [Android Lint / SwiftLint / 其他 / N/A]
+diff --git a/mobile-qa-workflow/templates/verification-report.md b/mobile-qa-workflow/templates/verification-report.md
+index 3b858f1..b49f7ce 100644
+--- a/mobile-qa-workflow/templates/verification-report.md
++++ b/mobile-qa-workflow/templates/verification-report.md
+@@ -11,6 +11,36 @@
+ 
+ ---
+ 
++### 契约溯源交叉验证结果
++
++- **验证状态**: [PASS / WARNING / FAIL / SKIPPED]
++- **修复路由**: [code-fix / non-code-fix]
++- **溯源记录总数**: [N 条]
++- **fix-design 跨模块引用数**: [M 处]
++- **溯源覆盖率**: [N/M × 100%]
++
++#### 逐条校验结果
++
++| # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 | 验证结果 |
++|---|-------|--------|-------|-------|---------|---------|
++| 1 | [API/资源描述] | [file:line] | [期望值] | [实际值] | [✅/❌/⚠️] | [PASS/MISMATCH/SUSPICIOUS] |
++| 2 | ... | ... | ... | ... | ... | ... |
++
++#### 异常等级说明
++- **PASS**：所有溯源项匹配状态均为 ✅
++- **WARNING**（SUSPICIOUS）：存在标记为「待确认」的项，但无明确不匹配
++- **FAIL**（INSUFFICIENT）：溯源记录条数 < fix-design 跨模块引用数
++- **FAIL**（MISMATCH）：存在期望值与实际值不匹配的项
++- **FAIL**（MISSING）：溯源记录为空或关键字段缺失
++- **SKIPPED**：Repair-Route = non-code-fix，无需溯源验证
++
++#### 对 L1 结论的影响
++- 契约溯源验证状态为 **FAIL** 时，L1 判定自动为 **未通过**
++- 契约溯源验证状态为 **WARNING** 时，L1 可标记为 **部分通过（需人工确认溯源项）**
++- 契约溯源验证状态为 **PASS** 或 **SKIPPED** 时，不影响 L1 判定
++
++---
++
+ ### L1: Spec 静态符合性验证
+ 
+ 通过 AI 代码走查，对照 Spec Document 逐条验证修改后的代码逻辑：
+@@ -64,6 +94,7 @@
+ 
+ ### 验证总结
+ - **L1 通过**: [是/否]
++- **契约溯源交叉验证**: [PASS/WARNING/FAIL/SKIPPED]
+ - **L2 通过**: [是/否]
+ - **L3-Static 通过**: [是/否]
+ - **L3-Dynamic 状态**: [Pending-CI]

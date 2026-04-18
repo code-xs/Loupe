@@ -14,6 +14,8 @@ output_context_bundle: null
 output_rca_report: null
 output_fix_design: null
 output_impl_report: null
+output_contract_checklist: null    # V3 新增：契约溯源检查清单
+output_error_dump: null            # V3 新增：纠错失败现场转储
 output_verification_report: null
 output_knowledge_card: null
 

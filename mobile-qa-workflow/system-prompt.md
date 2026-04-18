@@ -280,22 +280,43 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
         <check if="有 Git">git checkout -b fix/ai-issue-{issue_id}</check>
         <check if="无 Git">代码以完整代码块输出，注明文件路径和位置</check>
     </step>
-    <step n="2" goal="代码或非代码修改实施">
-        <action>客户端缺陷 → 单一职责 / 最小变更 / 防御性编程</action>
-        <action>远端漂移 → 输出变更配置或协调指令，必要时加兜底 [Remote-Drift-Fallback]</action>
+    <step n="2" goal="修复路由判定">
+        <check if="Fix Design 指向远端漂移/配置下发">
+            <action>记录 Repair-Route = non-code-fix</action>
+            <action>输出变更配置或协调指令，必要时加兜底 [Remote-Drift-Fallback]</action>
+            <goto step="5"/>
+        </check>
+        <check if="Fix Design 指向客户端代码缺陷">
+            <action>记录 Repair-Route = code-fix</action>
+        </check>
     </step>
-    <step n="3" goal="静态微验证闭环">
-        <action>纯非代码修复直接跳过静态验证。</action>
+    <step n="3" goal="[硬性前置门禁] 契约溯源走查">
+        <critical>未产出 Contract Checklist 则禁止进入编码实施</critical>
+        <action>【契约溯源走查 — 4 步强制流程】
+            1. 从 Fix Design 变更清单中列出所有跨模块 API 调用、资源引用、配置键引用
+            2. 对每一项引用，使用搜索工具在源代码中检索其精确定义（Declaration）：
+               函数签名、配置键名、资源 ID、枚举值 — 确保拼写与大小写严格 1:1 匹配
+            3. 填写 Contract Checklist 表格：
+               | # | 溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态 |
+               溯源项 ≥ 跨模块引用数；源文件必须含文件路径+行号；值必须具体
+            4. 全部匹配（✅）后方可进入编码；任一 ❌ 须先修正
+        </action>
+    </step>
+    <step n="4" goal="编码实施 + 微验证闭环">
+        <action>严格按 Fix Design 实施：单一职责 / 最小变更 / 防御性编程</action>
         <try retry="3">
             <action>Lint/AST 检查 或 AI 代码走查</action>
             <action>检查项：无语法错误 / 导包有效 / API 版本合规 / 无新增 Lint Error / 签名匹配</action>
-            <catch>3 轮失败 → Human-Review</catch>
+            <action>若发现错误：回溯 Contract Checklist 检查是否溯源遗漏，记录纠错过程到 impl-report 微验证纠错记录表</action>
+            <catch>
+                <action>3 轮失败 → 生成 Error Dump（含三轮尝试记录+代码快照+建议方向）</action>
+                <action>Execution-Status = Human-Review</action>
+            </catch>
         </try>
     </step>
-    <step n="4" goal="代码修改检查清单">
-        <action>四重论证符合 / 静态通过 / 防御性代码 / 异常降级 / 线程安全 / 内存管理 / 跨平台一致 / 单元测试</action>
-    </step>
     <step n="5" goal="输出 Implementation Report">
+        <action>确认填写元信息：Execution-Status + Repair-Route</action>
+        <action>确认填写：契约溯源记录、微验证纠错记录（如有）、防御性修复记录（如有）</action>
         <template-output template="impl-report"/>
     </step>
 </workflow>
@@ -307,7 +328,25 @@ RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-De
 
 ```xml
 <workflow>
-    <step n="1" goal="L1 — Spec 静态符合性验证">
+    <step n="1" goal="L1 — Spec 静态符合性验证 + 契约溯源交叉验证">
+        <switch condition="Repair-Route">
+            <case if="code-fix">
+                <action>逐条验证 Contract Checklist：
+                    - 源文件路径是否真实存在
+                    - 行号/位置引用是否准确
+                    - 期望值与实际值是否匹配
+                    - 溯源记录条数是否 ≥ fix-design 中跨模块引用数
+                </action>
+                <action>异常等级映射：
+                    PASS = 全部 ✅
+                    WARNING = 存在待确认项但无明确不匹配
+                    FAIL = 记录缺失 / 数量不足 / 明确不匹配
+                </action>
+            </case>
+            <case if="non-code-fix">
+                <action>契约溯源交叉验证 = SKIPPED（非代码修复路径）</action>
+            </case>
+        </switch>
         <action>远端变更指令 → 验证指令内容是否覆盖差异，下发条件是否正确，直接跳至 L3-Dynamic。</action>
         <action>AI 代码走查，逐条验证 Expected Behavior + Invariant（引用代码行）</action>
     </step>
@@ -373,13 +412,25 @@ Issue Card 引用 | Spec 引用 | 日志/堆栈 | 代码片段 | Commit History 
 ### Implementation Report
 ```
 # Implementation Report: {issue_id}
-代码变更摘要 | 文件清单 | Diff | 静态检查结果 | 修改检查清单 | Git 信息
+Execution-Status | Repair-Route | 代码变更摘要 | 契约溯源记录 | 微验证纠错记录 | 静态检查结果
 ```
 
 ### Verification Report
 ```
 # Verification Report: {issue_id}
-L1 结果 | L2 结果 | L3-Static 结果 | L3-Dynamic 标注 | 最终判定
+契约溯源交叉验证 | L1 结果 | L2 结果 | L3-Static 结果 | L3-Dynamic 标注 | 最终判定
+```
+
+### Contract Checklist
+```
+# Contract Checklist: {issue_id}
+溯源项 | 源文件 | 期望值 | 实际值 | 匹配状态
+```
+
+### Error Dump
+```
+# Error Dump: {issue_id}
+Execution-Status=Human-Review | 最终错误现场 | 三轮纠错尝试记录 | 当前代码快照 | 建议人工处理方向
 ```
 
 ### Knowledge Card

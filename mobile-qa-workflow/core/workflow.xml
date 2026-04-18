@@ -11,8 +11,8 @@
         <phase name="qa-spec-definition" input="issue-card.md" output="spec.md, context-curation-report.md, context-bundle.md"/>
         <phase name="qa-root-cause" input="issue-card.md, spec.md, context-bundle.md" output="rca-report.md; 可选: deep-dive-summary.md, functionality-deep-dive-rca.md"/>
         <phase name="qa-fix-design" input="issue-card.md, spec.md, rca-report.md; 可选: deep-dive-summary.md" output="fix-design.md"/>
-        <phase name="qa-fix-impl" input="fix-design.md, spec.md" output="impl-report.md"/>
-        <phase name="qa-verification" input="spec.md, fix-design.md, impl-report.md" output="verification-report.md, knowledge-card.md"/>
+        <phase name="qa-fix-impl" input="fix-design.md, spec.md; 可选: defensive-fix-design.md" output="impl-report.md; 条件必需: contract-checklist.md (代码修复路径); 条件生成: error-dump.md (3轮纠错失败时)"/>
+        <phase name="qa-verification" input="spec.md, fix-design.md, impl-report.md; 条件必需: contract-checklist.md (当上游为代码修复路径时)" output="verification-report.md, knowledge-card.md"/>
     </io-contract>
 
     <flow>
@@ -21,6 +21,7 @@
         </step>
 
         <step n="2" goal="判断当前阶段并加载工作流">
+            <action>读取 {config_source} 文件，获取 {env_subagent} 等环境能力配置</action>
             <action>读取 {workflow_status} 文件，获取 stepsCompleted 和 current_state</action>
             <check if="{workflow_status} 文件不存在">
                 <load target="mobile-qa-workflow/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
@@ -30,6 +31,7 @@
 
         <step n="3" goal="执行当前阶段">
             <action>更新 {workflow_status}：current_state 设为对应状态，last_updated 设为当前时间</action>
+            <action>初始化 {current_phase_result} = CONTINUE</action>
 
             <switch condition="{current_phase}">
                 <case if="qa-intake">
@@ -51,37 +53,48 @@
                     <check if="{env_subagent} == true">
                         <load target="mobile-qa-workflow/phases/p3-root-cause.md" prompt="加载并执行（多 Agent 模式），传递参数：
                             - config_source: {config_source}
-                            - workspace_folder: {workspace_root}/{issue_id}"/>
+                            - workspace_folder: {workspace_root}/{issue_id}
+                            - env_subagent: {env_subagent}"/>
                     </check>
                     <check if="{env_subagent} == false">
                         <load target="mobile-qa-workflow/phases/p3-root-cause.md" prompt="加载并执行（单对话降级模式），传递参数：
                             - config_source: {config_source}
-                            - workspace_folder: {workspace_root}/{issue_id}"/>
+                            - workspace_folder: {workspace_root}/{issue_id}
+                            - env_subagent: {env_subagent}"/>
                     </check>
                 </case>
 
                 <case if="qa-fix-design">
                     <load target="mobile-qa-workflow/phases/p4-fix-design.md" prompt="加载并执行，传递参数：
                         - config_source: {config_source}
-                        - workspace_folder: {workspace_root}/{issue_id}"/>
+                        - workspace_folder: {workspace_root}/{issue_id}
+                        - env_subagent: {env_subagent}"/>
                 </case>
 
                 <case if="qa-fix-impl">
                     <load target="mobile-qa-workflow/phases/p5-fix-impl.md" prompt="加载并执行，传递参数：
                         - config_source: {config_source}
-                        - workspace_folder: {workspace_root}/{issue_id}"/>
+                        - workspace_folder: {workspace_root}/{issue_id}
+                        - env_subagent: {env_subagent}
+                        - env_git: {env_git}"/>
                 </case>
 
                 <case if="qa-verification">
                     <load target="mobile-qa-workflow/phases/p6-verification.md" prompt="加载并执行，传递参数：
                         - config_source: {config_source}
-                        - workspace_folder: {workspace_root}/{issue_id}"/>
+                        - workspace_folder: {workspace_root}/{issue_id}
+                        - env_subagent: {env_subagent}"/>
                 </case>
             </switch>
         </step>
 
         <step n="4" goal="阶段完成后更新进度并路由">
-            <action>将 {current_phase} 加入 {workflow_status} 的 stepsCompleted 数组</action>
+            <check if="{current_phase_result} != ABORT">
+                <action>将 {current_phase} 加入 {workflow_status} 的 stepsCompleted 数组</action>
+            </check>
+            <check if="{current_phase_result} == ABORT">
+                <action>保留 {workflow_status} 的 stepsCompleted 不变，等待当前阶段人工处理或补充信息后再重试</action>
+            </check>
             <action>更新 {workflow_status} 的 lastStep 为 {current_phase}</action>
 
             <switch condition="{current_state}">

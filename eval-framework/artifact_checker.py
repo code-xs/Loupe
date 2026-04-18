@@ -4,6 +4,7 @@ Loupe AI 自检自测系统 — Artifact Checker (产物完整性校验)
 内容质量判定由 LLM-as-Judge 负责，此处仅做轻量存在性校验。
 
 V1.2 增强: 新增 required_sections 关键段落存在性校验
+V3.1 增强: 新增 conditional 条件必需产物校验 + Schema 兼容层
 """
 
 import os
@@ -11,11 +12,49 @@ import re
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, Optional
 
 import yaml
 
 logger = logging.getLogger(__name__)
 
+
+# ─── V3.1: 元信息解析函数（单一数据源） ────────────────────────
+
+# 展示格式 → 程序化格式的唯一标准化映射
+FIELD_MAPPING: Dict[str, str] = {
+    'Repair-Route': 'repair_route',
+    'Execution-Status': 'execution_status',
+}
+
+
+def parse_impl_report_metadata(content: str) -> Dict[str, Optional[str]]:
+    """从 impl-report.md 元信息区提取标准化键值。
+
+    解析 **Key**: value 格式的 Markdown 加粗标题行，
+    并将展示格式键名标准化为 snake_case。
+
+    Args:
+        content: impl-report.md 的完整文本内容
+
+    Returns:
+        标准化后的键值字典，例如：
+        {'repair_route': 'code-fix', 'execution_status': 'Success'}
+    """
+    metadata = {}
+    # 匹配 **Key**: value 格式
+    pattern = re.compile(r'\*\*(.+?)\*\*:\s*(.+)')
+    for match in pattern.finditer(content):
+        display_key = match.group(1).strip()
+        value = match.group(2).strip()
+        # 标准化映射
+        normalized_key = FIELD_MAPPING.get(display_key)
+        if normalized_key:
+            metadata[normalized_key] = value
+    return metadata
+
+
+# ─── Data Models ────────────────────────────────────────────────
 
 @dataclass
 class CheckResult:
@@ -35,6 +74,7 @@ class ArtifactChecker:
     1. 存在性
     2. 最小字数
     3. 关键段落存在性 (V1.2 新增)
+    4. 条件必需产物 (V3.1 新增)
     """
 
     def __init__(self, checklist_path: str):
@@ -61,12 +101,36 @@ class ArtifactChecker:
         """
         result = CheckResult()
 
+        # V3.1: 预先解析 impl-report 元信息（供条件必需产物校验使用）
+        metadata = self._load_impl_report_metadata(output_dir)
+
         # 1. 校验标准产物
         standard = self.checklist.get("standard_artifacts", {})
         required_items = standard.get("required", [])
 
         for item in required_items:
-            self._check_artifact(output_dir, item, result)
+            required_type = item.get('required', True)  # 默认 True 保持兼容
+
+            if required_type == 'conditional':
+                # V3.1 新增：条件必需产物
+                condition = item.get('condition', {})
+                condition_field = condition.get('field')
+                condition_value = condition.get('value')
+                # 从 impl-report 元信息中读取实际值
+                actual_value = metadata.get(condition_field)
+                if actual_value == condition_value:
+                    # 条件满足 → 视为 required
+                    self._check_artifact(output_dir, item, result)
+                else:
+                    # 条件不满足 → 跳过不扣分
+                    continue
+            elif required_type is True or required_type == True:
+                # 原逻辑：必需产物
+                self._check_artifact(output_dir, item, result)
+            else:
+                # 原逻辑：可选产物
+                self._check_artifact(output_dir, item, result,
+                                    is_optional=True)
 
         # 2. 校验专家模式产物（仅 Chain B）
         if chain_mode == "expert":
@@ -101,14 +165,27 @@ class ArtifactChecker:
 
         return result
 
+    @staticmethod
+    def _load_impl_report_metadata(output_dir: str) -> Dict[str, Optional[str]]:
+        """V3.1: 加载 impl-report.md 元信息"""
+        impl_report_path = os.path.join(output_dir, 'impl-report.md')
+        if os.path.exists(impl_report_path):
+            try:
+                with open(impl_report_path, 'r', encoding='utf-8') as f:
+                    return parse_impl_report_metadata(f.read())
+            except Exception as e:
+                logger.warning(f"Failed to parse impl-report metadata: {e}")
+        return {}
+
     def _check_artifact(self, output_dir: str, item: dict,
                         result: CheckResult,
                         prefix: str = "",
                         is_optional: bool = False):
         """检查单个产物文件"""
-        rel_path = item.get("path", "")
+        # V3.1 Schema 兼容层：同时支持 path/file 和 min_size/min_size_bytes
+        rel_path = item.get("path") or item.get("file", "")
         full_path = os.path.join(output_dir, prefix, rel_path)
-        min_size = item.get("min_size", 0)
+        min_size = item.get("min_size") or item.get("min_size_bytes", 0)
         phase = item.get("phase", "unknown")
         sections = item.get("required_sections", [])
 
@@ -123,7 +200,12 @@ class ArtifactChecker:
                     "path": rel_path,
                     "phase": phase,
                 })
-                logger.warning(f"Missing required artifact: {full_path}")
+                # V3.1: 记录 on_missing 动作
+                on_missing = item.get("on_missing", "fail")
+                if on_missing == "fail":
+                    logger.warning(f"Missing required artifact: {full_path} (on_missing=fail)")
+                else:
+                    logger.warning(f"Missing required artifact: {full_path}")
             return
 
         # 2. 最小字数

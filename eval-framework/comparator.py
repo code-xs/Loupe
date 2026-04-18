@@ -1,6 +1,8 @@
 """
 Loupe AI 自检自测系统 — Comparator (横向对比器)
 对比不同 Chain 的评分结果，生成增量价值分析和回归检测。
+
+V3.1: DIMENSIONS 扩展至 9 维度
 """
 
 import json
@@ -52,6 +54,10 @@ class Comparator:
         "reasoning_depth",
         "artifact_completeness",
         "defensive_fix_quality",
+        # V3.1 新增 3 维度
+        "contract_first_pass_accuracy",
+        "hallucination_interception",
+        "self_healing_rate",
     ]
 
     CHAINS = ["A", "B", "C", "D"]
@@ -66,7 +72,7 @@ class Comparator:
         )
 
     @staticmethod
-    def _load_results(dir_path: str) -> list[dict]:
+    def _load_results(dir_path: str) -> list:
         """加载评分结果"""
         results_file = Path(dir_path) / "judge-results.json"
         if results_file.exists():
@@ -103,7 +109,7 @@ class Comparator:
 
         return output
 
-    def _build_comparison_table(self) -> list[dict]:
+    def _build_comparison_table(self) -> list:
         """构建总览对比表"""
         chain_means = self._compute_chain_means()
         rows = []
@@ -111,7 +117,7 @@ class Comparator:
         for dim in self.DIMENSIONS + ["weighted_score"]:
             row = {"dimension": dim}
             for chain in self.CHAINS:
-                row[f"chain_{chain.lower()}"] = chain_means.get(chain, {}).get(dim, 0.0)
+                row["chain_{}".format(chain.lower())] = chain_means.get(chain, {}).get(dim, 0.0)
 
             # 计算增量百分比
             a = row.get("chain_a", 0)
@@ -130,7 +136,7 @@ class Comparator:
 
     def _compute_chain_means(self) -> dict:
         """计算各 Chain 各维度均分"""
-        by_chain: dict[str, list] = {}
+        by_chain = {}
         for r in self.current_results:
             chain = r.get("chain", "")
             by_chain.setdefault(chain, []).append(r)
@@ -185,8 +191,7 @@ class Comparator:
 
     def _breakdown_by_field(self, field_name: str) -> dict:
         """按指定字段分组对比"""
-        # 需要 case metadata，暂时按 case_id 分组
-        by_group: dict[str, dict[str, list]] = {}
+        by_group = {}
 
         for r in self.current_results:
             case_id = r.get("case_id", "")
@@ -219,7 +224,7 @@ class Comparator:
         current_means = self._compute_chain_means()
 
         # 计算 baseline 均分
-        baseline_by_chain: dict[str, list] = {}
+        baseline_by_chain = {}
         for r in self.baseline_results:
             chain = r.get("chain", "")
             baseline_by_chain.setdefault(chain, []).append(
@@ -259,7 +264,7 @@ class Comparator:
     def generate_pr_comment(self) -> str:
         """生成 PR Comment 格式的对比报告"""
         output = self.compare()
-        return ReportGenerator.generate_pr_comment(output)
+        return ComparatorReportGenerator.generate_pr_comment(output)
 
     @staticmethod
     def _pct_change(new: float, old: float) -> float:
@@ -269,7 +274,7 @@ class Comparator:
         return round((new - old) / old * 100, 2)
 
 
-class ReportGenerator:
+class ComparatorReportGenerator:
     """
     报告生成器
     支持 Markdown 格式的完整对比报告和 PR Comment 简报
@@ -291,7 +296,7 @@ class ReportGenerator:
             b = row.get("chain_b", "-")
             c = row.get("chain_c", "-")
             d = row.get("chain_d", "-")
-            lines.append(f"| {dim} | {a} | {b} | {c} | {d} |")
+            lines.append("| {} | {} | {} | {} | {} |".format(dim, a, b, c, d))
         lines.append("")
 
         # 增量价值分析
@@ -300,8 +305,9 @@ class ReportGenerator:
         lines.append("|---------|---------|------|---------|")
         for key, item in output.incremental_analysis.items():
             lines.append(
-                f"| {item['description']} | {item['formula']} | "
-                f"{item['value']}% | {item['question']} |"
+                "| {} | {} | {}% | {} |".format(
+                    item['description'], item['formula'],
+                    item['value'], item['question'])
             )
         lines.append("")
 
@@ -310,9 +316,9 @@ class ReportGenerator:
             lines.append("## ⚠️ 回归检测\n")
             for detail in output.regression_details:
                 lines.append(
-                    f"- **Chain {detail['chain']}**: "
-                    f"{detail['baseline_score']} → {detail['current_score']} "
-                    f"({detail['change_pct']}%)"
+                    "- **Chain {}**: {} → {} ({}%)".format(
+                        detail['chain'], detail['baseline_score'],
+                        detail['current_score'], detail['change_pct'])
                 )
             lines.append("")
 
@@ -320,10 +326,11 @@ class ReportGenerator:
         if output.category_breakdown:
             lines.append("## 分类型对比\n")
             for cat, chain_data in output.category_breakdown.items():
-                lines.append(f"### {cat}\n")
+                lines.append("### {}\n".format(cat))
                 for chain, stats in chain_data.items():
                     lines.append(
-                        f"- Chain {chain}: mean={stats['mean']}, n={stats['count']}"
+                        "- Chain {}: mean={}, n={}".format(
+                            chain, stats['mean'], stats['count'])
                     )
                 lines.append("")
 
@@ -347,8 +354,8 @@ class ReportGenerator:
         expert_vs_std = inc.get("expert_vs_standard", {}).get("value", 0)
         expert_vs_base = inc.get("expert_vs_baseline", {}).get("value", 0)
 
-        lines.append(f"**专家模式 vs 主流程**: {expert_vs_std:+.1f}%")
-        lines.append(f"**专家模式 vs LLM 裸跑**: {expert_vs_base:+.1f}%\n")
+        lines.append("**专家模式 vs 主流程**: {:+.1f}%".format(expert_vs_std))
+        lines.append("**专家模式 vs LLM 裸跑**: {:+.1f}%\n".format(expert_vs_base))
 
         # 简表
         lines.append("| 维度 | Chain A | Chain B | Chain D |")
@@ -360,13 +367,13 @@ class ReportGenerator:
             a = row.get("chain_a", "-")
             b = row.get("chain_b", "-")
             d = row.get("chain_d", "-")
-            lines.append(f"| {dim} | {a} | {b} | {d} |")
+            lines.append("| {} | {} | {} | {} |".format(dim, a, b, d))
 
         # 回归警告
         if output.regression_detected:
             lines.append("\n⚠️ **检测到回归**：")
             for d in output.regression_details:
-                lines.append(f"- Chain {d['chain']}: {d['change_pct']}%")
+                lines.append("- Chain {}: {}%".format(d['chain'], d['change_pct']))
 
         return "\n".join(lines)
 
@@ -405,8 +412,8 @@ def main():
         print(comment)
     else:
         output = comparator.compare()
-        report = ReportGenerator.generate_full_report(output, args.output)
-        print(f"Report generated: {args.output}")
+        report = ComparatorReportGenerator.generate_full_report(output, args.output)
+        print("Report generated: {}".format(args.output))
 
 
 if __name__ == "__main__":

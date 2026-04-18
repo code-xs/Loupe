@@ -1,6 +1,8 @@
 """
 Loupe AI 自检自测系统 — Report Generator (报告生成器)
 生成各类评估报告：完整报告、PR Comment、月度对比、趋势分析。
+
+V3.1: 适配 9 维度展示
 """
 
 import json
@@ -18,7 +20,7 @@ class ReportGenerator:
     def __init__(self, results_dir: str = "eval-results/"):
         self.results_dir = results_dir
 
-    def generate_baseline_report(self, eval_results: list[dict],
+    def generate_baseline_report(self, eval_results: list,
                                   scoring_report: dict,
                                   comparison_output: dict = None,
                                   output_path: str = "") -> str:
@@ -36,12 +38,12 @@ class ReportGenerator:
         """
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         lines = [
-            f"# Loupe 基准评估报告",
-            f"",
-            f"**生成时间**: {now}",
-            f"**评估 Case 数**: {len(set(r.get('case_id', '') for r in eval_results))}",
-            f"**评估链路数**: {len(set(r.get('chain', '') for r in eval_results))}",
-            f"**总评估次数**: {len(eval_results)}",
+            "# Loupe 基准评估报告",
+            "",
+            "**生成时间**: {}".format(now),
+            "**评估 Case 数**: {}".format(len(set(r.get('case_id', '') for r in eval_results))),
+            "**评估链路数**: {}".format(len(set(r.get('chain', '') for r in eval_results))),
+            "**总评估次数**: {}".format(len(eval_results)),
             "",
             "---",
             "",
@@ -55,33 +57,35 @@ class ReportGenerator:
             lines.append("|-------|---------|---------|")
             for chain, stats in sorted(chain_stats.items()):
                 lines.append(
-                    f"| {chain} | {stats.get('weighted_mean', 0):.3f} | "
-                    f"{stats.get('case_count', 0)} |"
+                    "| {} | {:.3f} | {} |".format(
+                        chain, stats.get('weighted_mean', 0), stats.get('case_count', 0))
                 )
             lines.append("")
 
-        # 维度明细
+        # 维度明细 (V3.1: 9 维度)
         if chain_stats:
             lines.append("## 维度明细评分\n")
             dims = [
                 "attribution_accuracy", "contributing_completeness",
                 "fix_correctness", "reasoning_depth",
                 "artifact_completeness", "defensive_fix_quality",
+                "contract_first_pass_accuracy", "hallucination_interception",
+                "self_healing_rate",
             ]
             header = "| 维度 |"
             sep = "|------|"
             for chain in sorted(chain_stats.keys()):
-                header += f" {chain} |"
+                header += " {} |".format(chain)
                 sep += "------|"
             lines.append(header)
             lines.append(sep)
 
             for dim in dims:
-                row = f"| {dim} |"
+                row = "| {} |".format(dim)
                 for chain in sorted(chain_stats.keys()):
                     dim_stats = chain_stats[chain].get("dimension_stats", {}).get(dim, {})
                     mean = dim_stats.get("mean", 0)
-                    row += f" {mean:.2f} |"
+                    row += " {:.2f} |".format(mean)
                 lines.append(row)
             lines.append("")
 
@@ -100,17 +104,17 @@ class ReportGenerator:
             header = "| Stage |"
             sep = "|-------|"
             for chain in sorted(chain_stats.keys()):
-                header += f" {chain} |"
+                header += " {} |".format(chain)
                 sep += "------|"
             lines.append(header)
             lines.append(sep)
 
             for stage in stages:
-                row = f"| {stage} |"
+                row = "| {} |".format(stage)
                 for chain in sorted(chain_stats.keys()):
                     s_stats = chain_stats[chain].get("stage_stats", {}).get(stage, {})
                     mean = s_stats.get("mean", 0)
-                    row += f" {mean:.2f} |" if mean > 0 else " N/A |"
+                    row += " {:.2f} |".format(mean) if mean > 0 else " N/A |"
                 lines.append(row)
             lines.append("")
 
@@ -119,9 +123,10 @@ class ReportGenerator:
         if cat_stats:
             lines.append("## 分类型评分分布\n")
             for cat, chain_data in sorted(cat_stats.items()):
-                lines.append(f"### {cat}\n")
+                lines.append("### {}\n".format(cat))
                 for chain, data in sorted(chain_data.items()):
-                    lines.append(f"- Chain {chain}: mean={data.get('mean', 0):.3f} (n={data.get('count', 0)})")
+                    lines.append("- Chain {}: mean={:.3f} (n={})".format(
+                        chain, data.get('mean', 0), data.get('count', 0)))
                 lines.append("")
 
         # 复杂度分布
@@ -129,9 +134,10 @@ class ReportGenerator:
         if comp_stats:
             lines.append("## 复杂度级别评分分布\n")
             for comp, chain_data in sorted(comp_stats.items()):
-                lines.append(f"### {comp}\n")
+                lines.append("### {}\n".format(comp))
                 for chain, data in sorted(chain_data.items()):
-                    lines.append(f"- Chain {chain}: mean={data.get('mean', 0):.3f} (n={data.get('count', 0)})")
+                    lines.append("- Chain {}: mean={:.3f} (n={})".format(
+                        chain, data.get('mean', 0), data.get('count', 0)))
                 lines.append("")
 
         # 低分 Case 列表
@@ -146,8 +152,9 @@ class ReportGenerator:
                 scores = r.get("scores", {})
                 weakest = min(scores, key=scores.get) if scores else "N/A"
                 lines.append(
-                    f"| {r.get('case_id', '')} | {r.get('chain', '')} | "
-                    f"{r.get('weighted_score', 0):.2f} | {weakest} |"
+                    "| {} | {} | {:.2f} | {} |".format(
+                        r.get('case_id', ''), r.get('chain', ''),
+                        r.get('weighted_score', 0), weakest)
                 )
             lines.append("")
 
@@ -158,7 +165,7 @@ class ReportGenerator:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(report)
-        logger.info(f"Baseline report generated: {output_path}")
+        logger.info("Baseline report generated: {}".format(output_path))
 
         return report
 
@@ -170,9 +177,9 @@ class ReportGenerator:
         """生成迭代改进报告"""
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         lines = [
-            f"# 迭代改进报告 — 第 {iteration_num} 轮",
-            f"",
-            f"**时间**: {now}",
+            "# 迭代改进报告 — 第 {} 轮".format(iteration_num),
+            "",
+            "**时间**: {}".format(now),
             "",
             "## 改进前后对比\n",
             "| 维度 | 改进前 | 改进后 | 变化 |",
@@ -185,14 +192,15 @@ class ReportGenerator:
             change = after - before
             emoji = "📈" if change > 0 else ("📉" if change < 0 else "➡️")
             lines.append(
-                f"| {dim} | {before:.2f} | {after:.2f} | {emoji} {change:+.2f} |"
+                "| {} | {:.2f} | {:.2f} | {} {:+.2f} |".format(
+                    dim, before, after, emoji, change)
             )
 
         lines.append("")
         lines.append("## 改进方案\n")
-        lines.append(f"- **目标文件**: {improvement_plan.get('target_file', 'N/A')}")
-        lines.append(f"- **改进类型**: {improvement_plan.get('type', 'N/A')}")
-        lines.append(f"- **改进描述**: {improvement_plan.get('description', 'N/A')}")
+        lines.append("- **目标文件**: {}".format(improvement_plan.get('target_file', 'N/A')))
+        lines.append("- **改进类型**: {}".format(improvement_plan.get('type', 'N/A')))
+        lines.append("- **改进描述**: {}".format(improvement_plan.get('description', 'N/A')))
 
         report = "\n".join(lines)
 

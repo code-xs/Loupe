@@ -1,6 +1,8 @@
 """
 Loupe AI 自检自测系统 — Weakness Detector (薄弱环节定位)
 分析评估结果，定位低分 Case 类型和 Stage，输出改进优先级。
+
+V3.1: DIMENSIONS 扩展至 9 维度 + 新增 3 维度归因规则
 """
 
 import logging
@@ -50,6 +52,10 @@ class WeaknessDetector:
         "reasoning_depth",
         "artifact_completeness",
         "defensive_fix_quality",
+        # V3.1 新增 3 维度
+        "contract_first_pass_accuracy",
+        "hallucination_interception",
+        "self_healing_rate",
     ]
 
     STAGES = [
@@ -60,7 +66,7 @@ class WeaknessDetector:
         "F5_defensive_fix",
     ]
 
-    # 维度到改进类型的映射
+    # 维度到改进类型的映射 (V3.1: 新增 3 维度归因规则)
     DIM_TO_IMPROVEMENT = {
         "attribution_accuracy": "prompt",
         "contributing_completeness": "reference",
@@ -68,6 +74,10 @@ class WeaknessDetector:
         "reasoning_depth": "agent",
         "artifact_completeness": "template",
         "defensive_fix_quality": "reference",
+        # V3.1 新增归因
+        "contract_first_pass_accuracy": "agent",       # 溯源准确率低 → 改进 coder-agent 溯源逻辑
+        "hallucination_interception": "prompt",         # 幻觉拦截率低 → 强化溯源 prompt 约束
+        "self_healing_rate": "architecture",            # 自愈率低 → 改进微验证纠错架构
     }
 
     STAGE_TO_FILE = {
@@ -81,7 +91,7 @@ class WeaknessDetector:
     def __init__(self, threshold: float = 7.0):
         self.threshold = threshold
 
-    def analyze(self, eval_results: list[dict],
+    def analyze(self, eval_results: list,
                 case_metadata: dict = None) -> WeaknessReport:
         """
         执行薄弱环节分析
@@ -121,10 +131,10 @@ class WeaknessDetector:
 
         return report
 
-    def _analyze_by_type(self, results: list[dict],
-                          metadata: dict) -> list[WeaknessItem]:
+    def _analyze_by_type(self, results: list,
+                          metadata: dict) -> list:
         """按问题类型分析薄弱维度"""
-        by_type: dict[str, list] = {}
+        by_type = {}
         for r in results:
             case_id = r.get("case_id", "")
             meta = metadata.get(case_id, {})
@@ -155,7 +165,7 @@ class WeaknessDetector:
 
         return weaknesses
 
-    def _analyze_by_stage(self, results: list[dict]) -> list[WeaknessItem]:
+    def _analyze_by_stage(self, results: list) -> list:
         """按 Stage 分析薄弱阶段"""
         weaknesses = []
 
@@ -177,7 +187,7 @@ class WeaknessDetector:
                     and r.get("stage_scores", {}).get(stage, 0) > 0
                 ]
                 weaknesses.append(WeaknessItem(
-                    category=f"Stage:{stage}",
+                    category="Stage:{}".format(stage),
                     dimension=stage,
                     mean_score=round(mean, 3),
                     threshold=self.threshold,
@@ -188,10 +198,10 @@ class WeaknessDetector:
 
         return weaknesses
 
-    def _cross_analyze(self, results: list[dict],
+    def _cross_analyze(self, results: list,
                         metadata: dict) -> dict:
         """交叉分析: Case 类型 × Stage"""
-        cross: dict[str, dict[str, list]] = {}
+        cross = {}
 
         for r in results:
             case_id = r.get("case_id", "")
@@ -225,13 +235,17 @@ class WeaknessDetector:
         total = len(report.weaknesses)
         top = report.top_priorities
 
-        lines = [f"发现 {total} 个薄弱环节，Top 5 改进优先级：\n"]
+        lines = ["发现 {} 个薄弱环节，Top 5 改进优先级：\n".format(total)]
         for i, w in enumerate(top, 1):
             lines.append(
-                f"{i}. **{w.category} / {w.dimension}**: "
-                f"均分 {w.mean_score:.1f} (阈值 {w.threshold}), "
-                f"差距 {w.gap:.1f}, 影响 {len(w.affected_cases)} 个 Case, "
-                f"建议改进类型: {w.improvement_type}"
+                "{}. **{} / {}**: "
+                "均分 {:.1f} (阈值 {}), "
+                "差距 {:.1f}, 影响 {} 个 Case, "
+                "建议改进类型: {}".format(
+                    i, w.category, w.dimension,
+                    w.mean_score, w.threshold,
+                    w.gap, len(w.affected_cases),
+                    w.improvement_type)
             )
 
         return "\n".join(lines)

@@ -5,7 +5,7 @@ Loupe AI 自检自测系统 — LLM-as-Judge (评分核心)
 - 在干净上下文中工作，读取静态产物文件
 - Judge 不得看到 Chain 标识（盲评）
 - 每次评分独立上下文（无跨 Case 记忆）
-- 6 维度评估: 归因准确率/贡献因子完整性/修复方向正确性/推理链深度/产物完整性/防御性修复质量
+- 9 维度评估 (V3.1): 原 6 维度 + contract_first_pass_accuracy / hallucination_interception / self_healing_rate
 """
 
 import os
@@ -126,6 +126,27 @@ JUDGE_EVAL_PROMPT = """## 评估任务
 - 4分: 仅修复直接问题，无防御考虑
 - 0分: 修复方案可能引入新风险
 
+#### 7. 契约溯源首次通过准确率 (contract_first_pass_accuracy) — 权重 {w_contract}
+- 10分: 所有跨模块引用首轮溯源全部匹配，无需修正
+- 7分: 首轮溯源 ≥80% 匹配，少量修正后全部通过
+- 4分: 首轮溯源 50-80% 匹配，需多轮修正
+- 0分: 首轮溯源 <50% 匹配或未执行溯源
+数据来源: contract-checklist.md 中匹配状态统计
+
+#### 8. 幻觉拦截率 (hallucination_interception) — 权重 {w_hallucination}
+- 10分: 溯源过程中发现并修正了所有臆测引用（或无臆测发生）
+- 7分: 拦截了大部分臆测引用，少量漏网
+- 4分: 仅拦截了部分臆测引用
+- 0分: 未执行溯源或臆测引用未被拦截
+数据来源: contract-checklist.md 中不匹配项 + impl-report 纠错记录
+
+#### 9. 自愈修复率 (self_healing_rate) — 权重 {w_self_healing}
+- 10分: 编码一次通过无需纠错，或所有纠错均在 3 轮内成功
+- 7分: 纠错成功但消耗了 2-3 轮
+- 4分: 部分纠错成功，部分失败触发 Human-Review
+- 0分: 纠错全部失败，全量触发 Human-Review
+数据来源: impl-report 微验证纠错记录 + Execution-Status
+
 请输出严格 JSON 格式:
 ```json
 {{
@@ -135,7 +156,10 @@ JUDGE_EVAL_PROMPT = """## 评估任务
     "fix_correctness": <0-10>,
     "reasoning_depth": <0-10>,
     "artifact_completeness": <0-10>,
-    "defensive_fix_quality": <0-10>
+    "defensive_fix_quality": <0-10>,
+    "contract_first_pass_accuracy": <0-10>,
+    "hallucination_interception": <0-10>,
+    "self_healing_rate": <0-10>
   }},
   "reasoning": {{
     "attribution_accuracy": "<评分理由>",
@@ -143,7 +167,10 @@ JUDGE_EVAL_PROMPT = """## 评估任务
     "fix_correctness": "<评分理由>",
     "reasoning_depth": "<评分理由>",
     "artifact_completeness": "<评分理由>",
-    "defensive_fix_quality": "<评分理由>"
+    "defensive_fix_quality": "<评分理由>",
+    "contract_first_pass_accuracy": "<评分理由>",
+    "hallucination_interception": "<评分理由>",
+    "self_healing_rate": "<评分理由>"
   }},
   "stage_scores": {{
     "F1_context_reconstruction": <0-10>,
@@ -171,12 +198,15 @@ class LLMJudge:
         self.rubric = self._load_rubric(rubric_path)
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self.weights = self.rubric.get("weights", {
-            "attribution_accuracy": 0.35,
-            "contributing_completeness": 0.15,
-            "fix_correctness": 0.20,
-            "reasoning_depth": 0.10,
-            "artifact_completeness": 0.10,
-            "defensive_fix_quality": 0.10,
+            "attribution_accuracy": 0.30,
+            "contributing_completeness": 0.12,
+            "fix_correctness": 0.18,
+            "reasoning_depth": 0.08,
+            "artifact_completeness": 0.09,
+            "defensive_fix_quality": 0.08,
+            "contract_first_pass_accuracy": 0.08,
+            "hallucination_interception": 0.04,
+            "self_healing_rate": 0.03,
         })
 
     @staticmethod
@@ -208,12 +238,15 @@ class LLMJudge:
             expected_contributing=case.expected_contributing,
             expected_fix_direction=case.expected_fix_direction,
             analysis_output=analysis_text,
-            w_attribution=self.weights.get("attribution_accuracy", 0.35),
-            w_contributing=self.weights.get("contributing_completeness", 0.15),
-            w_fix=self.weights.get("fix_correctness", 0.20),
-            w_reasoning=self.weights.get("reasoning_depth", 0.10),
-            w_artifact=self.weights.get("artifact_completeness", 0.10),
-            w_defensive=self.weights.get("defensive_fix_quality", 0.10),
+            w_attribution=self.weights.get("attribution_accuracy", 0.30),
+            w_contributing=self.weights.get("contributing_completeness", 0.12),
+            w_fix=self.weights.get("fix_correctness", 0.18),
+            w_reasoning=self.weights.get("reasoning_depth", 0.08),
+            w_artifact=self.weights.get("artifact_completeness", 0.09),
+            w_defensive=self.weights.get("defensive_fix_quality", 0.08),
+            w_contract=self.weights.get("contract_first_pass_accuracy", 0.08),
+            w_hallucination=self.weights.get("hallucination_interception", 0.04),
+            w_self_healing=self.weights.get("self_healing_rate", 0.03),
         )
 
         # 调用 LLM
@@ -269,6 +302,8 @@ class LLMJudge:
             "issue-card.md",
             "impl-report.md",
             "verification-report.md",
+            "contract-checklist.md",       # V3.1 新增
+            "error-dump.md",               # V3.1 新增
             "deep-dive/deep-dive-summary.md",
             "deep-dive/functionality-deep-dive-rca.md",
             "deep-dive/defensive-fix-design.md",
@@ -326,6 +361,9 @@ class LLMJudge:
                 "reasoning_depth": 5.0,
                 "artifact_completeness": 5.0,
                 "defensive_fix_quality": 5.0,
+                "contract_first_pass_accuracy": 5.0,
+                "hallucination_interception": 5.0,
+                "self_healing_rate": 5.0,
             },
             "reasoning": {
                 "attribution_accuracy": "[占位 - 需要真实 Judge LLM]",
@@ -334,6 +372,9 @@ class LLMJudge:
                 "reasoning_depth": "[占位]",
                 "artifact_completeness": "[占位]",
                 "defensive_fix_quality": "[占位]",
+                "contract_first_pass_accuracy": "[占位]",
+                "hallucination_interception": "[占位]",
+                "self_healing_rate": "[占位]",
             },
             "stage_scores": {
                 "F1_context_reconstruction": 5.0,
@@ -381,6 +422,10 @@ class LLMJudge:
             "reasoning_depth": r"reasoning_depth[\"']?\s*:\s*(\d+(?:\.\d+)?)",
             "artifact_completeness": r"artifact_completeness[\"']?\s*:\s*(\d+(?:\.\d+)?)",
             "defensive_fix_quality": r"defensive_fix_quality[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+            # V3.1 新增 3 维度
+            "contract_first_pass_accuracy": r"contract_first_pass_accuracy[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+            "hallucination_interception": r"hallucination_interception[\"']?\s*:\s*(\d+(?:\.\d+)?)",
+            "self_healing_rate": r"self_healing_rate[\"']?\s*:\s*(\d+(?:\.\d+)?)",
         }
         for key, pattern in patterns.items():
             match = re.search(pattern, text)
@@ -417,12 +462,15 @@ class LLMJudge:
             # 用自定义权重重算
             total = 0.0
             default_weights = {
-                "attribution_accuracy": 0.35,
-                "contributing_completeness": 0.15,
-                "fix_correctness": 0.20,
-                "reasoning_depth": 0.10,
-                "artifact_completeness": 0.10,
-                "defensive_fix_quality": 0.10,
+                "attribution_accuracy": 0.30,
+                "contributing_completeness": 0.12,
+                "fix_correctness": 0.18,
+                "reasoning_depth": 0.08,
+                "artifact_completeness": 0.09,
+                "defensive_fix_quality": 0.08,
+                "contract_first_pass_accuracy": 0.08,
+                "hallucination_interception": 0.04,
+                "self_healing_rate": 0.03,
             }
             weights = {**default_weights, **custom_weights}
             for dim, weight in weights.items():

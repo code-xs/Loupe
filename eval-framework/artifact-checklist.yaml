@@ -1,4 +1,4 @@
-# 产物完整性校验清单（V1.2 增强版）
+# 产物完整性校验清单（V1.2 增强版 / V3.1 条件产物扩展）
 # 包含文件存在性 + 最小字数 + 关键段落存在性校验
 
 standard_artifacts:
@@ -52,6 +52,23 @@ standard_artifacts:
     - path: "verification-report.md"
       min_size: 300
       phase: "P6-Verification"
+
+    # --- V3.1 新增：条件必需产物 ---
+    - path: contract-checklist.md
+      required: conditional
+      condition:
+        field: repair_route
+        value: code-fix
+      min_size: 200
+      on_missing: fail
+
+    - path: error-dump.md
+      required: conditional
+      condition:
+        field: execution_status
+        value: Human-Review
+      min_size: 300
+      on_missing: fail
 
 expert_mode_artifacts:
   conditional_on: "workflow-status.yaml → specialized_workflow.status ∈ {DD-Completed, Merged}"

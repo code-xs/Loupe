@@ -1,6 +1,6 @@
 ---
 name: qa-fix-impl
-description: Phase 5 — 修复实施，在独立分支执行代码修改并通过静态微验证闭环
+description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + 文件哨兵验收
 ---
 
 # 参数
@@ -57,101 +57,108 @@ description: Phase 5 — 修复实施，在独立分支执行代码修改并通�
         </check>
     </step>
 
-    <step n="4" goal="代码或非代码修改实施">
-        <check if="Fix Design 指向客户端代码缺陷">
-            <action>严格按照 Fix Design Document 实施代码修改：
-                - 单一职责：一个修复只解决一个问题，不搭便车
-                - 最小变更：修改范围尽可能小
-                - 防御性编程：增加必要的边界检查和异常保护
-            </action>
-
-            <check if="存在防御性修复条目（来自 step 2）">
-                <action>【防御性修复实施】
-                    1. 遍历 priority: critical 的防御性修复条目，逐条实施：
-                       - 熔断器（Circuit Breaker）：在关键状态转换路径上添加异常中断机制
-                       - 状态断言点（State Assertion）：在状态机关键节点添加不变量断言
-                       - 防御性守卫（Defensive Guard）：在危险操作前添加前置条件检查
-                    2. 对 priority: recommended 的条目，评估修复范围后酌情实施
-                    3. 每个已实现的防御措施需在代码注释中标注对应的条目 ID：
-                       // [DEFENSIVE-FIX] ID: df-001 - Circuit breaker for state transition
-                    4. 未实现的 critical 条目需在 impl-report.md 中说明原因
-                </action>
-            </check>
-        </check>
-        <check if="Fix Design 指向远端漂移/跨端协调修复">
+    <step n="4" goal="修复路由判定 + 输出路径初始化">
+        <check if="Fix Design 指向远端漂移/跨端协调/配置下发">
+            <action>记录 Repair-Route = non-code-fix</action>
             <action>执行【非代码修复实施分支】：
                 - 输出变更服务端配置、回滚 AB 实验或协调后端的具体指令和参数清单。
                 - 如果必须在客户端做兼容兜底，则仅实现兜底逻辑，并标注 [Remote-Drift-Fallback]。
             </action>
+            <goto step="7"/>
         </check>
-    </step>
-
-    <step n="5" goal="静态微验证闭环">
-        <check if="执行了纯非代码修复 (无客户端代码修改)">
-            <action>跳过静态代码 Lint 检查，直接标记微验证通过。</action>
-            <goto step="6"/>
-        </check>
-        
-        <try retry="3">
-            <check if="{env_lint_tools} == true">
-                <action>执行静态 Lint/AST 检查：
-                    - Android: ./gradlew lint
-                    - iOS: SwiftLint
-                    - 通用: AST 基础语法验证
-                </action>
-            </check>
-            <check if="{env_lint_tools} == false">
-                <action>AI 代码走查，逐项核对检查清单</action>
-            </check>
-
-            <action>验证必须通过的静态检查项：
-                - [ ] 无语法错误
-                - [ ] 导包/import 均有效（无幻觉包名）
-                - [ ] API 最低版本符合 minSdkVersion / Deployment Target
-                - [ ] 无新增 Lint Error
-                - [ ] 函数签名与调用方匹配
+        <check if="Fix Design 指向客户端代码缺陷">
+            <action>记录 Repair-Route = code-fix</action>
+            <action>【输出路径初始化】
+                1. 从 {config_source} 读取 {workspace_folder}
+                2. 赋值：
+                   {output_impl_report}        = {workspace_folder}/impl-report.md
+                   {output_contract_checklist}  = {workspace_folder}/contract-checklist.md
+                   {output_error_dump}          = {workspace_folder}/error-dump.md
+                3. 将上述路径写入 {config_source}（若尚未赋值）
             </action>
-
-            <check if="静态检查失败">
-                <action>AI 自动修正代码，更新 lint_retry_count</action>
-            </check>
-
-            <catch>
-                <action>超过 3 轮仍失败，触发 Human-Review：附失败原因 + 当前代码快照</action>
-                <action>更新 {workflow_status}：current_state = Human-Review, lint_retry_count = 3</action>
-                <action>阶段结束，返回编排器</action>
-            </catch>
-        </try>
+        </check>
     </step>
 
-    <step n="6" goal="代码修改检查清单">
-        <action>逐项确认：
-            - [ ] 修改符合 Fix Design Document 四重论证
-            - [ ] 静态 Lint/AST 检查通过（或 AI 代码走查通过）
-            - [ ] 没有引入新的 Lint Error（Warning 须列出）
-            - [ ] 添加了必要的防御性代码
-            - [ ] 异常路径有合理的降级策略
-            - [ ] 线程安全性已确认
-            - [ ] 内存管理正确
-            - [ ] 跨平台行为一致（L1/L2/L3）
-            - [ ] 添加/更新了相关单元测试
+    <step n="5" goal="调用 Coder SubAgent">
+        <check if="{env_subagent} == true">
+            <invoke-subagent subagent_type="coder-agent" subagent_prompt="
+                <load target='mobile-qa-workflow/core/core-rules.xml'
+                      prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/agents/coder-agent.md'
+                      prompt='加载角色定义'/>
+                [输入文档]
+                - fix-design: {fix_design}
+                - spec: {spec_file}
+                - defensive-fix-design: {defensive_fix_design}
+                - config_source: {config_source}
+                - workspace_folder: {workspace_folder}
+            "/>
+        </check>
+        <check if="{env_subagent} == false">
+            <action>【降级模式：主 Agent 内联执行 Coder Agent 四阶段工作流】
+                <load target="mobile-qa-workflow/agents/coder-agent.md" prompt="加载角色定义，在当前对话中内联执行四阶段工作流"/>
+            </action>
+        </check>
+    </step>
+
+    <step n="6" goal="SubAgent 结果接收与状态更新">
+        <action>按返回判定协议检查文件哨兵：</action>
+
+        <!-- 优先级 1：error-dump 存在 → Human-Review -->
+        <check if="{output_error_dump} 文件存在">
+            <action>Execution-Status = Human-Review</action>
+            <action>读取 error-dump.md，输出 Human-Review 通知</action>
+            <action>更新 {workflow_status}: current_state = Human-Review</action>
+            <action>current_phase_result = ABORT</action>
+            <goto step="8"/>
+        </check>
+
+        <!-- 优先级 2：impl-report 存在 且 error-dump 不存在 -->
+        <check if="{output_impl_report} 文件存在 且 {output_error_dump} 不存在">
+            <check if="Repair-Route = code-fix 且 {output_contract_checklist} 存在">
+                <action>Execution-Status = Success</action>
+                <action>验证 contract-checklist.md 满足最小必填字段规范（5 项：溯源项、源文件、期望值、实际值、匹配状态）</action>
+                <!-- Success → 允许流入 Step 7 -->
+            </check>
+            <check if="Repair-Route = non-code-fix">
+                <action>Execution-Status = Success</action>
+                <!-- Success → 允许流入 Step 7 -->
+            </check>
+            <check if="Repair-Route = code-fix 且 {output_contract_checklist} 不存在">
+                <action>Execution-Status = Incomplete</action>
+                <action>标记 [MISSING-REQUIRED-ARTIFACT: contract-checklist.md]</action>
+                <action>更新 {workflow_status}: current_state = Human-Review</action>
+                <action>current_phase_result = ABORT</action>
+                <goto step="8"/>
+            </check>
+        </check>
+
+        <!-- 优先级 3：两个产物均不存在 -->
+        <check if="{output_impl_report} 文件不存在 且 {output_error_dump} 不存在">
+            <action>Execution-Status = Incomplete</action>
+            <action>更新 {workflow_status}: current_state = Human-Review</action>
+            <action>current_phase_result = ABORT</action>
+            <goto step="8"/>
+        </check>
+    </step>
+
+    <step n="7" goal="输出与状态流转">
+        <action>确认 impl-report.md 中的 Execution-Status 和 Repair-Route 字段已正确填写</action>
+        <check if="Repair-Route = non-code-fix 且 {output_file} 文件不存在">
+            <template-output file="{output_file}" template="mobile-qa-workflow/templates/impl-report.md"/>
+        </check>
+        <check if="Repair-Route = code-fix">
+            <action>保留 Coder Agent 已生成的 impl-report.md，禁止使用模板覆写实施结果</action>
+        </check>
+        <action>更新 {config_source}：
+            output_impl_report = {output_file}
+            output_contract_checklist = {output_contract_checklist}（若存在）
         </action>
-
-        <check if="存在防御性修复条目（来自 step 2）">
-            <action>【防御性修复验证清单】额外逐项确认：
-                - [ ] 所有 priority: critical 条目已实施或已说明未实施原因
-                - [ ] 每个防御性措施代码注释含对应条目 ID
-                - [ ] 熔断器可正确触发和恢复
-                - [ ] 状态断言点在异常状态时抛出明确错误信息
-                - [ ] 防御性守卫不影响正常路径性能
-            </action>
-        </check>
+        <action>更新 {workflow_status}：current_state = Verifying</action>
     </step>
 
-    <step n="7" goal="输出 Implementation Report">
-        <template-output file="{output_file}" template="mobile-qa-workflow/templates/impl-report.md"/>
-        <action>更新 {config_source}：output_impl_report = {output_file}</action>
-        <action>更新 {workflow_status}：current_state = Verifying</action>
+    <step n="8" goal="失败路径收口">
+        <action>保持当前阶段未完成，等待 Human-Review 处理后重新进入 qa-fix-impl</action>
     </step>
 </workflow>
 ```

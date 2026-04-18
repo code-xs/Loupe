@@ -2,6 +2,8 @@
 Loupe AI 自检自测系统 — Scoring Engine (评分计算引擎)
 负责评分维度计算、加权汇总、统计分析。
 支持阶段级拆分评分 (F1-F5 / P1-P6) 和 Case 分组统计。
+
+V3.1: 扩展至 9 维度 + 权重总和断言
 """
 
 import json
@@ -59,6 +61,10 @@ class ScoringEngine:
         "reasoning_depth",
         "artifact_completeness",
         "defensive_fix_quality",
+        # V3.1 新增 3 维度
+        "contract_first_pass_accuracy",
+        "hallucination_interception",
+        "self_healing_rate",
     ]
 
     STAGES = [
@@ -72,13 +78,19 @@ class ScoringEngine:
     def __init__(self, rubric_path: str = "eval-framework/scoring-rubric-base.yaml"):
         self.rubric = self._load_rubric(rubric_path)
         self.weights = self.rubric.get("weights", {
-            "attribution_accuracy": 0.35,
-            "contributing_completeness": 0.15,
-            "fix_correctness": 0.20,
-            "reasoning_depth": 0.10,
-            "artifact_completeness": 0.10,
-            "defensive_fix_quality": 0.10,
+            "attribution_accuracy": 0.30,
+            "contributing_completeness": 0.12,
+            "fix_correctness": 0.18,
+            "reasoning_depth": 0.08,
+            "artifact_completeness": 0.09,
+            "defensive_fix_quality": 0.08,
+            "contract_first_pass_accuracy": 0.08,
+            "hallucination_interception": 0.04,
+            "self_healing_rate": 0.03,
         })
+        # V3.1: 权重总和断言
+        assert abs(sum(self.weights.values()) - 1.0) < 1e-6, \
+            f"Weights sum to {sum(self.weights.values())}, expected 1.0"
 
     @staticmethod
     def _load_rubric(path: str) -> dict:

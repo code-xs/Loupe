@@ -71,7 +71,11 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
                     <action>更新 {workflow_status}：current_state = Fix-Designing, reroute_reason = verification_design_insufficient, reroute_from_phase = qa-verification, reroute_target_phase = qa-fix-design, fix_retry_count += 1</action>
                 </case>
                 <case if="root_cause_not_closed">
-                    <action>更新 {workflow_status}：current_state = RCA-InProgress, verification_failure_type = root_cause_not_closed, fanout_mode = complex-arbitrated, reroute_reason = verification_root_cause_not_closed, reroute_from_phase = qa-verification, reroute_target_phase = qa-root-cause, rca_retry_count += 1</action>
+                    <!-- C5 收口：current_state 取值必须落在 core/workflow-status-template.yaml 头部注释列出的权威枚举集内；
+                         本 case 写入 RCA-Designing：语义为"将状态机回退到 RCA 设计阶段，由 P3 step 1 起重入"，
+                         与编排器 step 2/4 现有路由（按 reroute_target_phase = qa-root-cause）完全自洽，不引入新 case；
+                         v3 字面残留的非枚举集状态值已收口替换。 -->
+                    <action>更新 {workflow_status}：current_state = RCA-Designing, verification_failure_type = root_cause_not_closed, fanout_mode = complex-arbitrated, reroute_reason = verification_root_cause_not_closed, reroute_from_phase = qa-verification, reroute_target_phase = qa-root-cause, rca_retry_count += 1</action>
                 </case>
                 <case if="implementation_mismatch">
                     <action>更新 {workflow_status}：current_state = Fix-Designing, reroute_reason = verification_implementation_mismatch, reroute_from_phase = qa-verification, reroute_target_phase = qa-fix-design, fix_retry_count += 1</action>
@@ -80,6 +84,20 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
                     <action>更新 {workflow_status}：current_state = Human-Review</action>
                 </default>
             </switch>
+
+            <!-- C9：失败分支必先输出"中间态" verification-report 再回流；
+                 模板段落"中间态报告（失败回流时使用）"由 PR-6 在 templates/verification-report.md 提供，
+                 包含必填字段 failure_classification / evidence / repro_path。
+                 中间态/正态区分由模板内部按 verification_failure_type 是否为空切换段落（PR-6 落地），
+                 PR-4 调用方仅传现有 file/template 两个属性，不引入 mode 属性（避免与 core-rules.xml
+                 <template-output> 标签 DSL 漂移）。 -->
+            <template-output file="{output_verification}" template="mobile-qa-workflow/templates/verification-report.md"/>
+            <action>更新 {config_source}：output_verification_report = {output_verification}</action>
+
+            <!-- B1*：P6 失败回流是 stop_state（current_state ∈ {Fix-Designing, RCA-Designing, Human-Review}），
+                 按 D1 协议必须 ABORT；编排器 step 4 检测 ABORT 后不追加 qa-verification 到 stepsCompleted,
+                 让回流目标 phase（qa-fix-design / qa-root-cause）能被重新执行。 -->
+            <action>设置 current_phase_result = ABORT</action>
             <action>阶段结束，返回编排器</action>
         </check>
     </step>
@@ -98,7 +116,10 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
         <check if="{env_git} == false">
             <action>输出 Code Review Summary 文档，供人工创建 PR 时使用。</action>
         </check>
-        <action>更新 {workflow_status}：current_state = Closed</action>
+        <!-- C5 收口延伸（与 P6-A6 同类）：current_state 终态必须落在 core/workflow-status-template.yaml
+             权威枚举集内；Done 是工作流完成态对应的合法终值，与编排器 step 4 case Done 路由自洽；
+             v3 字面残留的非枚举集终态值已收口替换。 -->
+        <action>更新 {workflow_status}：current_state = Done</action>
     </step>
 </workflow>
 ```

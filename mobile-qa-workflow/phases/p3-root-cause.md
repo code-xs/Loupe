@@ -26,6 +26,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <check if="纯 C 级证据，阈值未通过">
             <action>列出需要补充的具体证据项</action>
             <action>更新 {workflow_status}：current_state = Spec-Defining</action>
+            <action>设置 current_phase_result = ABORT</action>
             <action>阶段结束，返回编排器</action>
         </check>
     </step>
@@ -61,6 +62,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     - reroute_target_phase = qa-root-cause
                     - rca_retry_count += 1
                 </action>
+                <action>设置 current_phase_result = ABORT</action>
                 <action>阶段结束，返回编排器</action>
             </check>
         </check>
@@ -84,6 +86,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     dimension_set = rca-5d
                     target_list = 所有 Investigator 结论
                     supporting_context = {spec_file}, {context_bundle}
+                    confidence_input = {上游 Investigator 输出的 final_score 列表（OVHSC SCORE 步产物，作为被质疑对象的原始置信度）}
                     conditional_dimensions = temporal-drift | activation（仅在触发条件成立时执行）
                     输出 Challenge Report，保留 confidence_impact 字段。"/>
             </check>
@@ -98,6 +101,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     - reroute_target_phase = qa-root-cause
                     - rca_retry_count += 1
                 </action>
+                <action>设置 current_phase_result = ABORT</action>
                 <action>阶段结束，返回编排器</action>
             </check>
         </check>
@@ -124,6 +128,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     dimension_set = rca-5d
                     target_list = 所有 Investigator 结论
                     supporting_context = {spec_file}, {context_bundle}
+                    confidence_input = {上游 2 个 Investigator 输出的 final_score 列表（OVHSC SCORE 步产物，按 Investigator 顺序合并；作为被质疑的双结论原始置信度）}
                     输出带 confidence_impact 的 Challenge Report。"/>
                 <invoke-subagent subagent_type="arbiter" subagent_prompt="
                     <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
@@ -133,6 +138,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     comparison_focus = root-cause convergence | challenge absorption | confidence calibration
                     candidate_set = 所有 Investigator 结论
                     challenge_reports = Challenger 输出
+                    base_score = {候选 RCA 结论的基础评分 = 上游 2 个 Investigator 输出的 final_score 列表，作为 arbiter 加权裁决的原始评分基线}
                     按共享公式输出 final_confidence。"/>
             </check>
             <check if="{env_subagent} == false">
@@ -147,6 +153,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                     - rca_retry_count += 1
                     - current_state = Human-Review
                 </action>
+                <action>设置 current_phase_result = ABORT</action>
                 <action>阶段结束，返回编排器</action>
             </check>
         </check>
@@ -198,11 +205,25 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
     <step n="10" goal="输出 Root Cause Report">
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
         <action>更新 {config_source}：output_rca_report = {output_file}</action>
+
+        <!-- C10 + D7：兼容性方案 A（顺序历史）+ 方案 B（单点快照）双保险；
+             无论本次 P3 是成功完成（最终置信度 >= 0.5）还是低置信 stop，
+             都需要记录 P3 完成时的 fanout_mode 取值，供 P3 重入时或迁移脚本反查使用。
+             写入顺序：先快照、后历史 append，均在下方 stop 路径强制重写之前执行，
+             确保记录的是"P3 本次完成时 fanout_mode 的自然取值"。 -->
+        <action>更新 {workflow_status}：rca_fanout_mode_snapshot = {fanout_mode}</action>
+        <action>更新 {workflow_status}.phase_history：append { phase: "qa-root-cause", timestamp: &lt;now ISO8601&gt;, fanout_mode: {fanout_mode}, note: null }</action>
+
         <check if="最终置信度 >= 0.5">
             <action>更新 {workflow_status}：current_state = Fix-Designing, reroute_reason = null, reroute_target_phase = null</action>
+            <!-- 成功完成路径：不写 current_phase_result，按 D1 默认行为视作 OK，
+                 编排器 step 4 把 qa-root-cause 追加到 stepsCompleted -->
         </check>
         <check if="最终置信度 < 0.5">
             <action>更新 {workflow_status}：current_state = RCA-LowConfidence, fanout_mode = complex-arbitrated, reroute_reason = low_final_confidence, reroute_from_phase = qa-root-cause, reroute_target_phase = qa-root-cause, rca_retry_count += 1</action>
+            <action>设置 current_phase_result = ABORT</action>
+            <!-- B1* 关键修复：RCA-LowConfidence 是 stop_state，phase 不应被算作完成；
+                 编排器 step 4 case RCA-LowConfidence 由 PR-2 变更点 W6 触发 step-pause -->
         </check>
     </step>
 </workflow>

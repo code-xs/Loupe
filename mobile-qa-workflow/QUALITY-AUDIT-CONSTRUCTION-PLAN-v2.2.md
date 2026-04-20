@@ -117,7 +117,7 @@
 
 | 缺陷 ID | 简述 | v1.2.1 锚点 | 工作量 | 归属 PR |
 |---|---|---|---|---|
-| B1* | Phase 早退 = ABORT 强协议（运行时变量赋值） | §三 B1\* / §七 #1 | 0.7d | PR-1 + PR-3 + PR-4 |
+| B1* | Phase 早退 = ABORT 强协议（运行时变量赋值；**PR-4 落地 6 处 = P3 ×5 + P6 ×1**，含 v2.2 实施期增补 P3-A5 step 10 RCA-LowConfidence stop） | §三 B1\* / §七 #1 | 0.7d | PR-1 + PR-3 + PR-4 |
 | B2 | P2 Non-Bug 闭环回填 | §三 B2 / §七 #2 | 0.3d | PR-3 |
 | B3 | Deep-Dive F1/F2/F3 默认落盘 | §三 B3 / §七 #3 | 0.2d | PR-5 |
 | C1 | `<task>` 标签纳入 supported-tags（含边界声明） | §三 C1 / §七 #4 | 0.1d | PR-1 |
@@ -188,7 +188,7 @@ flowchart TD
     PR1["PR-1（协议层）<br/>schema + tag DSL + step-pause 协议<br/>+ 顶层镜像字段 + schema_version 4<br/>(core-rules + status-template + config-schema)"]
     PR2["PR-2（编排器层）<br/>step-pause 双写 + step3 传参<br/>(core/workflow.xml)"]
     PR3["PR-3（phase 层）<br/>P2 Non-Bug 闭环 + Context-Curating"]
-    PR4["PR-4（phase 层）<br/>P3/P4/P6 ABORT + fix_fanout_mode + base_score"]
+    PR4["PR-4（phase 层）<br/>P3/P4/P6 ABORT(6) + fix_fanout_mode + C2(角色驱动)"]
     PR5["PR-5（phase 层）<br/>Deep-Dive 落盘 + step-pause IPC 全量补齐"]
     PR6["PR-6（agents/templates 层）<br/>wrapper Schema-Violation + 中间态模板"]
     PR7["PR-7（文档层）<br/>SKILL/system-prompt/PLATFORM-GUIDE 同步<br/>+ schema_version 4 引用"]
@@ -378,24 +378,26 @@ flowchart TD
 
 ### PR-4 · P3/P4/P6 ABORT 与字段隔离
 
+> **v2.3 微调**（2026-04-20）：本节根据 PR-4 子文档 v2.0 修订（基于 `pr4-phase-abort-fanout-isolation-REVIEW-2026-04-20.md` 4 项裁定）同步更新 ABORT 计数 / 写入位置 / C2 角色驱动注入矩阵 / P6 状态枚举收口；详细 patch list 见子文档 §7。
+
 - **层级**：🟠 phase 层
-- **目标**：完成 B1\* 主体（P3 ×4 + P6 ×1 共 5 处显式 ABORT 标记）+ C10 字段隔离 + C9 失败分支产物 + C2 base_score/confidence_input 注入。
-- **覆盖修复条目**：B1\*（P3/P6 显式 ABORT 5 处）、C2（调用方注入侧）、C9（phase 侧补 template-output）、C10（仅新增 `fix_fanout_mode` + 写 snapshot + 写 phase_history；**保留 `fanout_mode` 为 RCA 字段**）
+- **目标**：完成 B1\* 主体（**P3 ×5 + P6 ×1 共 6 处**显式 ABORT 标记，含 v2.2 实施期增补 P3-A5 step 10 RCA-LowConfidence stop）+ C10 字段隔离 + C9 失败分支产物 + C2 confidence_input/base_score 角色驱动注入 + P6-A6 内 `RCA-InProgress → RCA-Designing` C5 状态枚举权威源对齐。
+- **覆盖修复条目**：B1\*（P3/P6 显式 ABORT **6 处**）、C2（调用方注入侧 — 角色驱动）、C5（P6-A6 状态枚举收口）、C9（phase 侧补 template-output）、C10（仅新增 `fix_fanout_mode` + 写 snapshot + 写 phase_history；**保留 `fanout_mode` 为 RCA 字段**）
 - **涉及文件**（3 个）：
   - `phases/p3-root-cause.md`（修改）：
-    - 4 处 `阶段结束，返回编排器`（L29 / L64 / L101 / L150）前各插入 `<action>设置 current_phase_result = ABORT</action>`
-    - step 7 新增 `<action>更新 {workflow_status}：rca_fanout_mode_snapshot = {fanout_mode}</action>`（C10 兼容性方案 B 快照，**snapshot 名称保留**）
-    - 同 step 7 增加 `<action>更新 {workflow_status}.phase_history：append {phase: "qa-root-cause", timestamp: <now>, fanout_mode: {fanout_mode}, note: null}</action>`（C10 兼容性方案 A 主路径，**结构遵循 PR-1 注释**）
-    - 调用 investigator/challenger/arbiter 的 subagent_prompt 拼接 `base_score = {上游 final_score 列表}`（C2 调用方注入侧）
+    - **5 处** ABORT 标记（4 处 `阶段结束，返回编排器`：L29 / L64 / L101 / L150 + step 10 case "最终置信度 < 0.5" 写入 RCA-LowConfidence 之后 1 处）前各插入 `<action>设置 current_phase_result = ABORT</action>`
+    - **step 10 新增**（v2.3 修正：v2.2 原文写"step 7"，但 step 7 仅 deep-dive 路径执行、写入会丢失非 deep-dive 路径下的 phase_history）`<action>更新 {workflow_status}：rca_fanout_mode_snapshot = {fanout_mode}</action>`（C10 兼容性方案 B 快照，**snapshot 名称保留**）
+    - 同 step 10 增加 `<action>更新 {workflow_status}.phase_history：append {phase: "qa-root-cause", timestamp: <now>, fanout_mode: {fanout_mode}, note: null}</action>`（C10 兼容性方案 A 主路径，**结构遵循 PR-1 注释**）
+    - 调用 challenger 注入 `confidence_input`、调用 arbiter 注入 `base_score`（**C2 角色驱动**，与 `agents/shared-{challenger,arbiter}-base.md` 输入契约逐字段对齐；investigator/fix-proposer 不强制注入）
   - `phases/p4-fix-design.md`（修改）：
     - 把 `fanout_mode = {fix_strategy_mode}` 与 `fanout_mode = contested-arbitrated` 全部改为 `fix_fanout_mode = ...`（**强制阶段间字段隔离**；**注意：保留对 `fanout_mode` 字段本身的 RCA 用途，仅 P4 内部不再写入它**）
-    - 调用 fix-proposer/challenger/arbiter 的 subagent_prompt 拼接 `confidence_input`
+    - 调用 challenger 注入 `confidence_input`、调用 arbiter 注入 `base_score`（**C2 角色驱动**，与 P3 共享同一映射规则）
   - `phases/p6-verification.md`（修改）：
-    - 1 处 `阶段结束，返回编排器`（L83）前插入 `<action>设置 current_phase_result = ABORT</action>`
-    - 失败分支必先调用 `<template-output file="…/verification-report.md" template="templates/verification-report.md"/>` 生成"中间态"报告再回流（与 PR-6 模板侧配合）
+    - 1 处 `阶段结束，返回编排器`（L83）前插入 `<action>设置 current_phase_result = ABORT</action>`，并把 case `root_cause_not_closed` 写入的 `current_state = RCA-InProgress` **收口为 `RCA-Designing`**（C5 状态枚举权威源对齐 / `core/workflow-status-template.yaml` 头部注释枚举集）
+    - 失败分支必先调用 `<template-output file="…/verification-report.md" template="templates/verification-report.md"/>` 生成"中间态"报告再回流（与 PR-6 模板侧配合）；**v2.3 修正**：本 PR 调用方仅用现有 `file` / `template` 属性；中间态/正态切换下沉到 PR-6 模板内由 `verification_failure_type` 判断（v1.0 子文档曾设计 `mode='intermediate'` 属性，已撤销，避免与 `core/core-rules.xml` `<template-output>` DSL 漂移）
     - **保留** P6 失败回流时强制 `fanout_mode = complex-arbitrated` 的 RCA 升级语义（这是 RCA 字段的合法用途，不属于 C10 污染范畴）
 - **工作量**：1.0d（不变）
-- **评审重点**：5 处 ABORT 标记位置完整；P4 内 `fanout_mode → fix_fanout_mode` 是否漏改且**未误改 P3/P6 中合法的 `fanout_mode` 写入**；`phase_history` append 元素结构是否符合 PR-1 注释；C9 中间态报告字段是否充分。
+- **评审重点**：**6 处** ABORT 标记位置完整（P3 ×5 + P6 ×1）；P4 内 `fanout_mode → fix_fanout_mode` 是否漏改且**未误改 P3/P6 中合法的 `fanout_mode` 写入**；P6-A6 内 `RCA-InProgress → RCA-Designing` 收口正确性（C5）；C2 角色驱动注入矩阵（challenger → `confidence_input`；arbiter → `base_score`）；`phase_history` append 元素结构是否符合 PR-1 注释；C9 中间态报告字段是否充分。
 
 ---
 
@@ -492,7 +494,7 @@ flowchart TD
 - PR-1 · schema 协议层 → [`construction-plans/v2.2/pr1-schema-protocol.md`](./construction-plans/v2.2/pr1-schema-protocol.md)
 - PR-2 · 编排器 step-pause 双写 + step3 传参 → [`construction-plans/v2.2/pr2-orchestrator-step-pause.md`](./construction-plans/v2.2/pr2-orchestrator-step-pause.md)
 - PR-3 · P2 Non-Bug 闭环 + Context-Curating → _待展开_
-- PR-4 · P3/P4/P6 ABORT + 字段隔离 + base_score → _待展开_
+- PR-4 · P3/P4/P6 ABORT(6) + 字段隔离 + C2 角色驱动注入 → [`construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md`](./construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md)（v2.0 子文档 + v2.3 主文档微调，2026-04-20）
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → _待展开_
 - PR-6 · agents/templates 治理（最小子集） → _待展开_
 - PR-7 · SKILL/system-prompt/PLATFORM-GUIDE 同步 → _待展开_
@@ -702,7 +704,7 @@ Exit code (would be): 0
 
 ### 7.4 PR-4 回滚
 
-- **revert 后状态**：P3/P6 的 ABORT 标记 5 处全部消失 → B1\* 主链路根因复发；`fix_fanout_mode` 字段消失 → C10 字段污染复发；P6 失败分支不再产出 verification-report.md；`phase_history` / `rca_fanout_mode_snapshot` 不再被 P3 写入
+- **revert 后状态**：P3/P6 的 ABORT 标记 **6 处**（P3 ×5 + P6 ×1，含 v2.2 实施期增补 P3-A5）全部消失 → B1\* 主链路根因复发；`fix_fanout_mode` 字段消失 → C10 字段污染复发；P6-A6 的 `current_state = RCA-Designing` 同时回滚为 v3 字面残留 `RCA-InProgress` → C5 权威源漂移复发（PR-8 CI §5.1 第 1 项立即 fail）；P6 失败分支不再产出 verification-report.md；`phase_history` / `rca_fanout_mode_snapshot` 不再被 P3 写入；challenger / arbiter 角色驱动注入消失（如 PR-6 已合入则 wrapper `[Schema-Violation]` 立即触发，必须**同步评估**是否回滚 PR-6）
 - **风险等级**：🟡 中
 - **回滚 SQL**：`git revert <PR-4-merge-commit>`，并通知存量会话使用迁移脚本回退（**注意：迁移脚本不支持 v4→v3 反向迁移**，需手工或恢复备份）
 

@@ -33,7 +33,7 @@
             <action>更新 {workflow_status}：
                 - fix_risk_level = {fix_risk_level}
                 - fix_strategy_mode = {fix_strategy_mode}
-                - fanout_mode = {fix_strategy_mode}
+                - fix_fanout_mode = {fix_strategy_mode}
                 - reroute_reason = null
             </action>
         </step>
@@ -67,13 +67,14 @@
                         dimension_set = fix-4a
                         target_list = 当前 Fix-Proposer 方案
                         supporting_context = {rca_report}, {spec_file}
+                        confidence_input = { rca_final_confidence: {上游 P3 arbiter 的 final_confidence}, fix_proposer_self_confidence: {当前 Fix-Proposer 自评置信度} }
                         输出四重攻击结果与 confidence_impact。"/>
                 </check>
                 <check if="{env_subagent} == false">
                     <action>顺序模拟 Fix-Proposer + Challenger，保留四重攻击结果。</action>
                 </check>
                 <check if="challenger 出现 Critical">
-                    <action>更新 {workflow_status}：fix_strategy_mode = contested-arbitrated, fanout_mode = contested-arbitrated, reroute_reason = challenged_fix_escalated</action>
+                    <action>更新 {workflow_status}：fix_strategy_mode = contested-arbitrated, fix_fanout_mode = contested-arbitrated, reroute_reason = challenged_fix_escalated</action>
                     <action>goto step="3"</action>
                 </check>
             </check>
@@ -98,6 +99,7 @@
                         dimension_set = fix-4a
                         target_list = 所有 Fix-Proposer 方案
                         supporting_context = {rca_report}, {spec_file}
+                        confidence_input = { rca_final_confidence: {上游 P3 arbiter 的 final_confidence}, fix_proposer_self_confidence: {Proposer-A 自评置信度 + Proposer-B 自评置信度 数组} }
                         输出四重攻击结果。"/>
                     <invoke-subagent subagent_type="arbiter" subagent_prompt="
                         <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
@@ -107,6 +109,7 @@
                         comparison_focus = root-cause coverage | side-effect risk | minimality | rollback safety
                         candidate_set = 所有 Fix-Proposer 方案
                         challenge_reports = Challenger 输出
+                        base_score = {候选 Fix 方案的基础评分 = Proposer-A / Proposer-B 自评置信度数组（作为 arbiter 加权裁决的原始评分基线）；可附 rca_final_confidence 作为权重缩放因子}
                         输出最终方案裁定、评估矩阵与 final_confidence。"/>
                 </check>
                 <check if="{env_subagent} == false">

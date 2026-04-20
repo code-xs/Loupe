@@ -92,6 +92,74 @@
 
 ---
 
+### 中间态报告（v4.1 范围 — 始终物理存在；成功填 N/A，失败必填）
+
+> **协议层现状声明（v4.1 / C9 方案 A）**：
+> 当前 `<template-output>` 在 `core/core-rules.xml` 仅有 `file` / `template` 两个参数（无模式 / 变量绑定 / 条件块 / 分支渲染能力），P6 成功与失败路径调用同一模板，模板本身为静态 markdown。
+> 因此 v4.1 范围**不能**实现"成功路径不渲染本段"的条件渲染；本段在所有验证场景下均会物理出现于生成的 verification-report.md。
+> v4.1 取**方案 A**：三必填字段始终物理存在，**成功路径填标准 `N/A` 占位**、**失败路径必填实际内容**。"协议层条件渲染机制"（方案 B）作为 v4.2 遗留 #4 的 follow-up 候选（不在本 PR 范围）。
+>
+> **三必填字段**（缺一项视为 C9 校验失败 — 无论成功/失败场景；成功场景的 `N/A` 占位也算"已填"）：
+
+- **failure_classification**: 失败分类
+  - 成功场景填：`N/A (verification passed)`
+  - 失败场景必须从以下集合中选择并填写：
+    - `L1-Spec-Mismatch`：L1 Spec 静态符合性验证未通过
+    - `L1-Contract-Trace-Fail`：契约溯源交叉验证 FAIL
+    - `L2-Regression-Risk`：L2 静态影响面或回归测试设计未通过
+    - `L3-Static-Lint-Regress`：L3-Static Lint / 安全扫描出现新增问题
+    - `L3-Static-Api-Compat`：L3-Static API 版本合规出现风险
+    - `Root-Cause-Not-Closed`：验证发现修复未真正闭合根因（建议回退到 Phase 3 重做 RCA）
+    - `Other`：上述均不适用时使用，并在 evidence 字段补充说明
+- **evidence**: 失败证据
+  - 成功场景填：`N/A (verification passed)`
+  - 失败场景必须包含：
+    - 触发失败的具体验证项（引用 L1/L2/L3-Static 表格中的行）
+    - 期望值与实际值的并列对照（若适用）
+    - 关联代码位置（`file:line`）或日志锚点
+- **repro_path**: 复现路径
+  - 成功场景填：`N/A (verification passed)`
+  - 失败场景必须包含：
+    - 复现步骤（最小化序列）
+    - 复现环境（平台 / 版本 / 配置 / 必要前置数据）
+    - 期望复现结果（与 evidence 中"实际值"一致）
+
+#### 中间态报告 Markdown 块（成功场景）
+
+> 以下示例使用 `~~~markdown` 围栏以避免与外层 ```` ``` ```` 围栏冲突；实际生成时按内部内容原样填入即可。
+
+~~~markdown
+### 中间态报告
+
+- **failure_classification**: N/A (verification passed)
+- **evidence**: N/A (verification passed)
+- **repro_path**: N/A (verification passed)
+~~~
+
+#### 中间态报告 Markdown 块（失败场景）
+
+~~~markdown
+### 中间态报告
+
+- **failure_classification**: [L1-Spec-Mismatch / L1-Contract-Trace-Fail / L2-Regression-Risk / L3-Static-Lint-Regress / L3-Static-Api-Compat / Root-Cause-Not-Closed / Other]
+- **evidence**:
+  - [触发失败的验证项 + 期望/实际对照]
+  - [关联代码位置 file:line 或日志锚点]
+- **repro_path**:
+  - [复现步骤]
+  - [复现环境]
+  - [期望复现结果]
+~~~
+
+> **与 PR-4 的协作**（主文档 §3 PR-4 v2.3 微调）：PR-4 在 `phases/p6-verification.md` 失败
+> 分支已确保先调用 `<template-output file="…/verification-report.md" template="…/verification-report.md"/>`
+> 再回流；成功分支同样调用同一模板。本 PR 不向 `<template-output>` 引入任何自定义模式属性
+> （v1.0 子文档曾设计的 intermediate 模式取值已在 v2.3 微调撤销，避免与 `core/core-rules.xml`
+> `<template-output>` DSL 漂移）。
+> v4.1 不承诺"成功路径省略本段"的条件渲染语义；该能力归 v4.2 遗留 #4 候选（方案 B）。
+
+---
+
 ### 验证总结
 - **L1 通过**: [是/否]
 - **契约溯源交叉验证**: [PASS/WARNING/FAIL/SKIPPED]

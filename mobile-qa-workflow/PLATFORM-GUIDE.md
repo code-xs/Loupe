@@ -24,7 +24,8 @@
 - `{variable}` 用于运行时变量注入；场景参数、维度参数、模式参数由调用处显式写入 `subagent_prompt`，不依赖 `agents/*.md` 内部模板渲染。
 - `workflow-status.yaml` 是动态路由唯一可信状态源；`analysis_complexity`、`fanout_mode`、`fix_fanout_mode`、`fix_strategy_mode`、`reroute_target_phase`、重试计数、`phase_history`、`user_inputs`、`non_bug_context`、`parse_error_count`、`rca_fanout_mode_snapshot` 等字段由阶段文件写回，由主编排器读取并执行。
 - 恢复已有会话时必须优先识别 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`）；旧状态缺字段时，需要先补兼容默认值（迁移脚本：`mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py`），再恢复阶段执行。
-- `current_phase_result` 是 phase 执行期的**运行时变量**（不入持久化字段表），phase 早退前显式 `current_phase_result = ABORT` 让编排器接管 step-pause；编排器侧不读不写持久化镜像。
+- `current_phase_result` 是 phase 执行期的**运行时变量**（D1：仅在 phase 当次执行轮次内有效，**不会持久化**到 `workflow-status.yaml`）；phase 早退前显式 `current_phase_result = ABORT`，编排器在同一执行轮次读取后接管 step-pause 调度。
+- 顶层镜像字段（v4.1 起步白名单 = `{ non_bug_user_choice }`）由编排器对 step-pause 用户回复执行**白名单受限双写**（D8 + D15）：`workflow_status.user_inputs.<result_field>` 总写；当且仅当 `<result_field>` 在白名单内时，才同步写顶层 `workflow_status.<result_field>`。编排器现阶段继续读取顶层镜像（如 `{non_bug_user_choice}`）以兼容 `core/workflow.xml` 现有 switch；v4.2 收敛后才会改读 `user_inputs.<key>` 并删除顶层镜像字段。**接入方不得删除编排器侧的镜像读写逻辑**。
 
 ## 主链路策略
 

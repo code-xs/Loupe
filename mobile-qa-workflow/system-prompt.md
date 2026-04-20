@@ -26,7 +26,7 @@
         <tag name="switch/case">多分支条件</tag>
         <tag name="action">执行操作</tag>
         <tag name="goto">跳转到指定步骤（step=编号）</tag>
-        <tag name="step-pause">硬停顿，输出选项后等待用户确认。**仅允许出现在主编排器 step 4 内**（按 `current_state` 路由，phase 文件禁止内联，应通过 `current_phase_result = ABORT` 让编排器接管，D14）。必填参数：`title` / `result_field` / `allowed_values`；可选 `option`（D16）</tag>
+        <tag name="step-pause">硬停顿，输出选项后等待用户确认。**仅允许出现在主编排器 step 4 内**（按 `current_state` 路由，phase 文件**禁止新增**内联，应通过 `current_phase_result = ABORT` 让编排器接管，D14）。**例外**：`mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt` 中已登记的 v2.1 之前现存条目（v4.1 暂不动，v4.2 遗留 #6 整改目标）；本文件 Phase 2 step 3 / Phase 4 step 6 内联 step-pause 即此类。必填参数：`title` / `result_field` / `allowed_values`；可选 `option`（D16）</tag>
         <tag name="ask">向用户提问</tag>
         <tag name="try/catch">重试机制（retry=次数）</tag>
         <tag name="template-output">按模板保存产物</tag>
@@ -225,7 +225,19 @@ Verifying → implementation_mismatch    → Fix-Designing
     </step>
     <step n="3" goal="Spec 校准">
         <action>来源优先级：PRD(1) > 设计稿(2) > 竞品(3) > 用户口述(4)</action>
-        <check if="Spec 模糊或冲突">current_state = Spec-Uncertain（编排器 step 4 触发 Spec-Uncertain step-pause，phase 内不弹窗）</check>
+        <check if="Spec 模糊或冲突">
+            <action>标记 [Spec-Uncertain]，列出多种可能的 Expected Behavior</action>
+            <!-- ⚠️ v4.2 遗留 #6：phases/p2-spec-definition.md:53 同步保留内联
+                 <step-pause>（与编排器 step 4 case Spec-Uncertain 重复弹窗，已知
+                 bug，登记 legacy-phase-step-pause-allowlist.txt 的 step4-spec-uncertain
+                 条目）。按 D14 收窄声明，v4.1 暂不动以避免 scope creep；v4.2 整体
+                 迁出 phase 文件，由编排器统一调度。Limited 平台当前按本内联描述执行。 -->
+            <step-pause title="Spec 存在歧义，请确认 Expected Behavior：{spec_options}">
+                <option title="[1] {option_1}"/>
+                <option title="[2] {option_2}"/>
+                <option title="[S] Skip：先并行分析所有可能，后续确认" action="对每种可能 Spec 分别分析"/>
+            </step-pause>
+        </check>
     </step>
     <step n="4" goal="非 Bug 判定（D14 早退模式）">
         <action>Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
@@ -327,6 +339,11 @@ Verifying → implementation_mismatch    → Fix-Designing
     </step>
     <step n="6" goal="输出 Fix Design Document">
         <template-output template="fix-design"/>
+        <!-- ⚠️ v4.2 遗留 #6：本内联 <step-pause> 与 phases/p4-fix-design.md:136 同步保留
+             （已登记 mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
+             的 step6-fix-design-confirm 条目）。按 D14 收窄声明，v4.1 暂不动以避免
+             scope creep；v4.2 整体迁出 phase 文件，由编排器 step 4 新 case
+             Fix-Confirming 统一调度。Limited 平台当前按本内联描述执行即可。 -->
         <step-pause title="Fix Design 完成，确认进入修复实施？">
             <option title="[C] Continue"/>
             <option title="[R] Revise → 修改后 goto step 2"/>
@@ -424,15 +441,20 @@ Verifying → implementation_mismatch    → Fix-Designing
     <step n="4" goal="L3-Dynamic 标注">
         <action>[Pending-CI] 性能(P95) / 内存(Heap Dump) / Crash Free Rate — 不阻塞闭环</action>
     </step>
-    <step n="5" goal="验证判定">
+    <step n="5" goal="验证判定（D1 ABORT 早退 + C5 状态枚举对齐）">
         <check if="L1+L2+L3-Static 全通过">继续</check>
         <check if="任一层未通过">
-            <action>先分类失败类型：design_insufficient / root_cause_not_closed / implementation_mismatch</action>
-            <action>按类型写回 workflow-status：
-                design_insufficient → reroute_target_phase=qa-fix-design
-                root_cause_not_closed → reroute_target_phase=qa-root-cause 且 fanout_mode=escalate-required
-                implementation_mismatch → reroute_target_phase=qa-fix-design
+            <action>先分类失败类型并写 workflow_status.verification_failure_type：
+                design_insufficient / root_cause_not_closed / implementation_mismatch</action>
+            <action>按类型回写 workflow_status（与 phases/p6-verification.md 权威实现一致）：
+                design_insufficient        → current_state = Fix-Designing, reroute_target_phase = qa-fix-design,    fix_retry_count += 1
+                root_cause_not_closed      → current_state = RCA-Designing,  reroute_target_phase = qa-root-cause,   fanout_mode = complex-arbitrated, rca_retry_count += 1
+                implementation_mismatch    → current_state = Fix-Designing,  reroute_target_phase = qa-fix-design,    fix_retry_count += 1
             </action>
+            <action>设置 current_phase_result = ABORT（D1 / B1*：让编排器 step 4 不追加 qa-verification 到 stepsCompleted，回流目标 phase 才能被重新执行）</action>
+            <!-- C5 收口：root_cause_not_closed 写入 RCA-Designing 而非 v3 字面残留 RCA-InProgress；
+                 fanout_mode = complex-arbitrated 是 RCA 三档枚举内的合法升级值（不是 escalate-required）。
+                 与 phases/p6-verification.md:73-79 完全自洽。 -->
         </check>
     </step>
     <step n="6" goal="输出 Verification Report + Knowledge Card">

@@ -13,6 +13,8 @@ routing_policy_version: "abc-1"
 legacy_agent_set: false
 compat_mode: true
 artifact_policy: "appendix-first"
-emit_environment_factor_report: false
-emit_topology_report: false
-emit_concurrency_report: false
+# v4.1 / B3 修复：F1/F2/F3 默认产物落盘（Deep-Dive F4 isolation-debate 强依赖三件套作为输入）
+# 之前 false 导致 F4 入参缺失，与 v1.2.1 §三 B3 描述一致；翻 true 让 F1-F3 默认输出物理文件。
+emit_environment_factor_report: true
+emit_topology_report: true
+emit_concurrency_report: true

@@ -9,8 +9,7 @@
 - PR-2 · 编排器 step-pause 双写 + step3 传参 → [`pr2-orchestrator-step-pause.md`](./pr2-orchestrator-step-pause.md)
 - PR-3 · P2 Non-Bug 闭环 + Context-Curating → [`pr3-p2-non-bug-context-curating.md`](./pr3-p2-non-bug-context-curating.md)
 - PR-4 · P3/P4/P6 ABORT + 字段隔离 + base_score → [`pr4-phase-abort-fanout-isolation.md`](./pr4-phase-abort-fanout-isolation.md)
-- PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → 待展开
-- PR-6 · agents/templates 治理（最小子集） → 待展开
+- PR-5 + PR-6（实施期合并） · Deep-Dive 落盘 + agents/templates 治理 → [`pr5-6-deep-dive-and-agents-templates.md`](./pr5-6-deep-dive-and-agents-templates.md)
 - PR-7 · SKILL/system-prompt/PLATFORM-GUIDE 同步 → 待展开
 - PR-8 · CI + install 整合 → 待展开
 

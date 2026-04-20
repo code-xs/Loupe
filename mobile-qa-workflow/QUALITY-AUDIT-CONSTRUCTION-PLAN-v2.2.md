@@ -495,8 +495,8 @@ flowchart TD
 - PR-2 · 编排器 step-pause 双写 + step3 传参 → [`construction-plans/v2.2/pr2-orchestrator-step-pause.md`](./construction-plans/v2.2/pr2-orchestrator-step-pause.md)
 - PR-3 · P2 Non-Bug 闭环 + Context-Curating → [`construction-plans/v2.2/pr3-p2-non-bug-context-curating.md`](./construction-plans/v2.2/pr3-p2-non-bug-context-curating.md)
 - PR-4 · P3/P4/P6 ABORT(6) + 字段隔离 + C2 角色驱动注入 → [`construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md`](./construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md)（v2.0 子文档 + v2.3 主文档微调，2026-04-20）
-- PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → _待展开_
-- PR-6 · agents/templates 治理（最小子集） → _待展开_
+- PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → [`construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md`](./construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md)（**实施期合并**到同一子文档；§3 PR-5 设计描述本体不动）
+- PR-6 · agents/templates 治理（最小子集） → [`construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md`](./construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md)（**实施期合并**到同一子文档；§3 PR-6 设计描述本体不动）
 - PR-7 · SKILL/system-prompt/PLATFORM-GUIDE 同步 → _待展开_
 - PR-8 · CI + install 整合 → _待展开_
 

@@ -17,17 +17,36 @@
     </llm>
 
     <supported-tags>
+        <!-- 白名单仅约束 <flow>/<task> 内部 DSL 标签；元数据标签（<llm>/<mandate>/
+             <agent-taxonomy>/<human-review-protocol>/<trigger>/<output-format> 等）不受 LLM 解析校验。 -->
         <tag name="flow">顶层工作流容器</tag>
+        <tag name="task">在 phase 文件内定义可调度的子任务容器，与 flow 同级</tag>
         <tag name="step">步骤定义（n=编号, goal=目标）。严禁跳过或合并</tag>
         <tag name="check">条件判断（if=条件）</tag>
         <tag name="switch/case">多分支条件</tag>
         <tag name="action">执行操作</tag>
         <tag name="goto">跳转到指定步骤（step=编号）</tag>
-        <tag name="step-pause">硬停顿，输出选项后等待用户确认</tag>
+        <tag name="step-pause">硬停顿，输出选项后等待用户确认。**仅允许出现在主编排器 step 4 内**（按 `current_state` 路由，phase 文件禁止内联，应通过 `current_phase_result = ABORT` 让编排器接管，D14）。必填参数：`title` / `result_field` / `allowed_values`；可选 `option`（D16）</tag>
         <tag name="ask">向用户提问</tag>
         <tag name="try/catch">重试机制（retry=次数）</tag>
         <tag name="template-output">按模板保存产物</tag>
     </supported-tags>
+
+    <input-protocol scope="step-pause">
+        <!-- D2 + D16 step-pause 输入协议 -->
+        <rule>step-pause 输出必须打印 `[result_field=<key>]` + `[allowed_values=<v1>|<v2>|...]` 标签</rule>
+        <rule>step-pause 标题最后一行**必须追加** `请用 <key>=<value> 回复`</rule>
+        <rule>用户回复**首行**含 `<key>=<value>`，`<value>` 必须在 `allowed_values` 白名单内</rule>
+        <rule>解析成功 → 编排器**白名单受限双写**：`workflow_status.user_inputs.<key> = <value>`（总写）；当且仅当 `<key>` 在顶层镜像白名单内（v4.1 起步：`non_bug_user_choice`），才同步写 `workflow_status.<key> = <value>`</rule>
+        <rule>解析失败 → 输出 `[parse-error: 期望 <key> ∈ <allowed_values>]` 并重新触发同一 step-pause；`workflow_status.parse_error_count += 1`，连续 ≥ 3 次切到 `current_state = Human-Review`</rule>
+        <rule>每次进入新 step-pause 前 / 解析成功 / 熔断后，重置 `workflow_status.parse_error_count = 0`</rule>
+    </input-protocol>
+
+    <workflow-result-protocol>
+        <!-- D1：current_phase_result 是 phase 执行期的运行时变量（不入 workflow-status schema） -->
+        <rule>phase 早退必须通过 `<action>设置 current_phase_result = ABORT</action>` 在返回编排器前显式赋值</rule>
+        <rule>编排器 step 4 在同一执行轮次读取 `current_phase_result`：若 `= ABORT` 则不追加 stepsCompleted，按 `current_state` 路由到对应 step-pause case</rule>
+    </workflow-result-protocol>
 
     <human-review-protocol>
         触发条件：对抗轮次超 3 轮未收敛 / 置信度 &lt; 0.5 / 客户端-服务端边界歧义 / Spec 多种解读 / Lint 3 轮失败 / Non-Bug 回流 > 2 次。
@@ -60,25 +79,63 @@ workflow_step:
 ## 2. 状态机
 
 ```
-Intake → Spec-Defining → RCA-InProgress → Fix-Designing → Fix-Implementing → Verifying → Closed
-  ↓                                           ↑
-Info-Insufficient ─── (补充信息) ──────────────┘
-  
-Spec-Defining → Non-Bug → Accept → Closed
-                           → Reflow(≤2次) → Spec-Defining
-                           → Reflow(>2次) → Human-Review
-Spec-Defining → Spec-Uncertain ─── (用户确认) → Spec-Defining
-RCA-InProgress → RCA-LowConfidence ─── (补充/Human-Review) → Spec-Defining
-Verifying → design_insufficient → Fix-Designing
-Verifying → root_cause_not_closed → RCA-InProgress
-Verifying → implementation_mismatch → Fix-Designing
-任意阶段 → Human-Review ─── (人工处理) → 任意阶段
+Intake → Spec-Defining → Context-Curating → RCA-Designing → Fix-Designing → Fix-Implementing → Verifying → Done
+  ↓             ↓                ↓                                                    ↑
+Info-       Spec-          Curation-                                                  │
+Insufficient Uncertain     Failed                                                     │
+  ↓             ↓                ↓                                                    │
+(补充信息) (用户确认)         (人工/重试)                                              │
+  └────→ Spec-Defining ←────────┘                                                    │
+                                                                                      │
+Spec-Defining → Boundary-Refined ─── (回填证据) → Spec-Defining                       │
+                                                                                      │
+Spec-Defining → Non-Bug → Accept → Done                                              │
+                       → Reflow (non_bug_reflow_count ≤ 2) → Spec-Defining           │
+                       → Reflow (non_bug_reflow_count >  2) → Human-Review           │
+                                                                                      │
+RCA-Designing → RCA-LowConfidence ─── (补充证据 / Human-Review) → Spec-Defining       │
+                                                                                      │
+Verifying → design_insufficient        → Fix-Designing                                │
+Verifying → root_cause_not_closed      → RCA-Designing（强制 fanout_mode = complex-arbitrated）
+Verifying → implementation_mismatch    → Fix-Designing
+任意阶段  → Human-Review ─── (人工处理) → 任意阶段
 ```
 
+> **`current_state` 完整合法枚举集**（C5 单一权威源 / `core/workflow-status-template.yaml`）：
+> `Intake` / `Spec-Defining` / `Spec-Uncertain` / `Context-Curating` / `Curation-Failed` /
+> `Boundary-Refined` / `Non-Bug` / `Info-Insufficient` / `RCA-Designing` /
+> `RCA-LowConfidence` / `Fix-Designing` / `Fix-Implementing` / `Verifying` /
+> `Human-Review` / `Done`
+>
+> 任何 phase / 编排器 / 文档新增的 `current_state` 取值，必须先在权威源注册并同步本文件。
+
 状态恢复补充规则：
-- 恢复已有会话时优先读取 `workflow_version` / `schema_version`；缺失则按旧版状态补齐默认字段后继续。
+- 恢复已有会话时优先读取 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`）；缺失则运行迁移脚本（`mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py`）或按旧版状态补齐默认字段后继续。
 - 编排器优先消费 `reroute_target_phase`，允许 `qa-root-cause` 或 `qa-fix-design` 插队重入。
 - 当 `rca_retry_count > 2` 或 `fix_retry_count > 2` 时，直接进入 `Human-Review`，避免无限回流。
+
+---
+
+## 2.1 workflow_status 关键字段（v4.1 / `schema_version: 4`）
+
+> 完整权威源见 `core/workflow-status-template.yaml`。下表枚举 v4.1 主要字段；老字段（`fanout_mode` / `analysis_complexity` / `reroute_target_phase` / `rca_retry_count` / `fix_retry_count` / `non_bug_reflow_count` / `lint_retry_count` 等）保持原语义。
+
+| 字段 | 默认 | 用途 | 备注 |
+|---|---|---|---|
+| `schema_version` | `4` | v4.1 schema 升级 | v3 → 4，迁移脚本兜底 |
+| `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离） | 与 RCA 字段 `fanout_mode` 物理隔离 |
+| `rca_fanout_mode_snapshot` | `null` | P3 完成时 `fanout_mode` 的快照 | C10 兼容性方案 B 兜底 |
+| `phase_history` | `[]` | 阶段执行历史 | 元素结构 `{phase, timestamp, fanout_mode, note?}`；P3 完成时 append |
+| `user_inputs` | `{}` | step-pause 用户回复命名空间容器 | 编排器 step 4 解析回复后**总是**写入 `user_inputs.<result_field>` |
+| `non_bug_context` | `null` | 最近一次 P2 Non-Bug 判定上下文文本 | 供编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用；非长期业务字段，允许覆盖 |
+| `parse_error_count` | `0` | step-pause 连续解析失败熔断计数器 | 进入新 step-pause / 解析成功 / 熔断后清零；累计 ≥ 3 切 `Human-Review` |
+| `non_bug_user_choice` | `null` | step-pause 用户选择（`Accept` / `Reflow`）的**顶层镜像白名单字段** | **v4.1 过渡，v4.2 收敛到 `user_inputs.non_bug_user_choice`** |
+
+> ❌ **不持久化 `current_phase_result`**（D1：phase 执行期运行时变量，非 schema 字段）。
+>
+> ⚠️ **顶层镜像字段白名单（D8 + D15）**：v4.1 起步白名单 = `{ non_bug_user_choice }`；新增需 PR Review 显式批准；v4.2 整体收敛后将删除全部顶层镜像字段，编排器统一改读 `user_inputs.<key>`。
+>
+> 🔁 **Non-Bug 三字段职责正交**（v1.2 review 收口）：`non_bug_reflow_count`（跨轮回流次数 / Human-Review 触发器输入）/ `non_bug_user_choice`（当前轮 step-pause 用户选择，白名单镜像）/ `non_bug_context`（当前轮 P2 Non-Bug 判定上下文，顶层 schema 字段）。
 
 ---
 
@@ -100,15 +157,22 @@ Verifying → implementation_mismatch → Fix-Designing
     </step>
 
     <step n="4" goal="阶段完成后路由">
+        <!-- 编排器先读运行时变量 current_phase_result：若 = ABORT 则不追加 stepsCompleted；
+             所有 step-pause 必须遵循 §0 <input-protocol> 协议（标题强制 `请用 <key>=<value> 回复`）。
+             D14：phase 文件禁止内联 step-pause；本步骤是全部 step-pause 的唯一调度入口。 -->
         <switch condition="current_state">
-            <case if="Info-Insufficient">暂停，向用户请求补充信息 → 补充后 goto step 2</case>
-            <case if="Spec-Uncertain">暂停，向用户确认 Spec → 确认后 goto step 2</case>
-            <case if="Non-Bug">用户确认 Accept → Closed | 用户 Reflow（≤2次）→ goto step 2 重新评估 | Reflow 超 2 次 → Human-Review</case>
-            <case if="RCA-LowConfidence">暂停，建议补充证据或转人工 → 处理后 goto step 2</case>
-            <case if="Human-Review">输出 Human-Review 通知 → 等待人工指令 → goto step 2</case>
-            <case if="Closed">输出最终摘要，工作流结束</case>
+            <case if="Info-Insufficient">step-pause 请求补充信息（result_field=info_insufficient_action, allowed_values=Submit）→ 补充后 goto step 2</case>
+            <case if="Spec-Uncertain">step-pause 确认 Spec（result_field=spec_uncertain_choice, allowed_values=1|2|S）→ 确认后 goto step 2</case>
+            <case if="Non-Bug">step-pause 标题渲染 `{non_bug_context}` 占位（result_field=non_bug_user_choice, allowed_values=Accept|Reflow）→ Accept → current_state = Done | Reflow（`non_bug_reflow_count` ≤ 2）→ goto step 2 重新评估 | Reflow（`non_bug_reflow_count` > 2）→ Human-Review</case>
+            <case if="RCA-LowConfidence">step-pause 选择重试或转人工（result_field=rca_lowconf_action, allowed_values=Retry|Human）→ goto step 2</case>
+            <case if="Curation-Failed">step-pause 选择重试或转人工（result_field=curation_failed_action, allowed_values=Retry|Human）→ goto step 2</case>
+            <case if="Human-Review">step-pause 输出 Human-Review 通知（result_field=human_review_continue, allowed_values=Continue）→ goto step 2</case>
+            <case if="Done">输出最终摘要，工作流结束</case>
             <default>goto step 2（进入下一阶段）</default>
         </switch>
+        <!-- 双写白名单（D8 + D15）：解析成功后总是写 user_inputs.<result_field>；
+             仅当 <result_field> 在顶层镜像白名单内（v4.1 起步：non_bug_user_choice），
+             才同步写顶层镜像字段。其余 5 个 result_field 不进白名单，不污染顶层 schema。 -->
     </step>
 </flow>
 
@@ -161,23 +225,28 @@ Verifying → implementation_mismatch → Fix-Designing
     </step>
     <step n="3" goal="Spec 校准">
         <action>来源优先级：PRD(1) > 设计稿(2) > 竞品(3) > 用户口述(4)</action>
-        <check if="Spec 模糊或冲突">current_state = Spec-Uncertain，暂停确认</check>
+        <check if="Spec 模糊或冲突">current_state = Spec-Uncertain（编排器 step 4 触发 Spec-Uncertain step-pause，phase 内不弹窗）</check>
     </step>
-    <step n="4" goal="非 Bug 判定">
+    <step n="4" goal="非 Bug 判定（D14 早退模式）">
         <action>Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
         <check if="判定非 Bug">
-            <action>输出 Non-Bug Resolution Report（判定类别、依据、沟通建议、改进建议）</action>
-            <action>体验改进路由：多用户同一误解→UX 工单 | 明确期望差异→Feature Request | 仅个人偏好→跳过</action>
-            <step-pause title="判定为非 Bug，请确认">
-                <option title="[A] Accept：确认非 Bug，关闭" action="current_state = Non-Bug"/>
-                <option title="[R] Reflow：提出异议，提供新证据重新评估" action="
-                    non_bug_reflow_count &lt; 2 → 标注 [Re-Evaluated]，goto step 1 重新评估
-                    non_bug_reflow_count >= 2 → 触发 Human-Review"/>
-            </step-pause>
+            <action>生成 Non-Bug Resolution Report 文本（判定类别、判定依据、沟通建议、改进建议）</action>
+            <action>更新 workflow_status：non_bug_context = {上述报告文本}（D17：编排器 case Non-Bug step-pause 标题占位 `{non_bug_context}` 的唯一数据源）</action>
+            <action>更新 workflow_status：current_state = Non-Bug</action>
+            <action>设置 current_phase_result = ABORT（D1：运行时变量；让编排器接管 step-pause）</action>
+            <action>退出 phase（不再继续 step 5-7）</action>
         </check>
+        <!-- D14：本 phase **禁止**内联 <step-pause>；Non-Bug 的 Accept / Reflow 选择由编排器 step 4
+             case Non-Bug 统一发起 step-pause，标题渲染 {non_bug_context} 占位。
+             v4.1 仅治理 Non-Bug 主路径；现存 Spec-Uncertain 内联 step-pause 登记 v4.2 遗留 #6 -->
     </step>
     <step n="5" goal="上下文策展 (Context Curation)">
-        <action>对候选证据执行去重、存活性校验、保守配置掩码、动态映射。输出 Context Curation Report。置信度 &lt; 0.4 时回退或转人工。</action>
+        <action>对候选证据执行去重、存活性校验、保守配置掩码、动态映射。输出 Context Curation Report。</action>
+        <action>更新 workflow_status：current_state = Context-Curating（C5）</action>
+        <check if="curation_confidence &lt; 0.4">
+            <action>更新 workflow_status：current_state = Curation-Failed（C5）</action>
+            <action>设置 current_phase_result = ABORT（D1 / B1* 兜底，由编排器 case Curation-Failed 接管）</action>
+        </check>
     </step>
     <step n="6" goal="二维证据可信度分级">
         <action>按 Reliability (A/B/C) × Liveness (Live/Suspect/Dead) 进行二维分级。Dead 证据不进入推理。</action>
@@ -373,7 +442,7 @@ Verifying → implementation_mismatch → Fix-Designing
     <step n="7" goal="PR/MR 生成">
         <check if="有 Git">创建 PR: fix: [描述] (issue-{issue_id})</check>
         <check if="无 Git">输出 Code Review Summary</check>
-        <action>current_state = Closed</action>
+        <action>current_state = Done（C5：终态枚举为 Done，权威源 core/workflow-status-template.yaml）</action>
     </step>
 </workflow>
 ```

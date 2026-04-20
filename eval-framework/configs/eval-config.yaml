@@ -44,7 +44,7 @@ chain_definitions:
     skill: "mobile-qa-workflow"
     mode: "standard"
   B:
-    name: "专家模式（Functionality/UI Deep-Dive）"
+    name: "专家模式（Functionality Deep-Dive）"
     executor: "ide_session"
     skill: "mobile-qa-workflow"
     mode: "expert"

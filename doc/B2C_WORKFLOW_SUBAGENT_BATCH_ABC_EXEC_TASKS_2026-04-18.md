@@ -2,7 +2,7 @@
 
 > 日期：2026-04-18
 > 范围：`Batch A0` 之后的全部剩余改造场景
-> 目标：把共享基座、动态 fan-out、专项角色收敛、产物分级、UI Deep-Dive 和评测闭环拆成可直接执行的任务序列
+> 目标：把共享基座、动态 fan-out、专项角色收敛、产物分级、UI/UX 深度分析（主流程内） 和评测闭环拆成可直接执行的任务序列
 
 ---
 
@@ -28,7 +28,7 @@
 - 专项阶段与编排收敛
 - 专项产物分级
 - 平台入口与文档同步
-- `UI Deep-Dive` 建设
+- `UI/UX 深度分析（主流程内）` 建设
 - `eval-framework` 验证闭环
 
 因此，这份文档已经覆盖了 A0 之后的全部剩余改造场景，不再遗漏主需求中的后续批次。
@@ -472,7 +472,7 @@ Batch C 负责真正做“结构收敛、产物瘦身、产品谱系补齐、评
 
 1. 专项角色从 6 个细粒度角色收敛为 4~5 个复合角色
 2. 专项阶段、产物和主编排依赖关系同步收敛
-3. `UI Deep-Dive` 有独立入口
+3. `UI/UX 深度分析（主流程内）` 有独立入口
 4. 能用 `eval-framework` 比较改造前后收益
 
 ---
@@ -636,24 +636,24 @@ Batch C 负责真正做“结构收敛、产物瘦身、产品谱系补齐、评
 
 ---
 
-### C-T7 建设 UI Deep-Dive 工作流
+### C-T7 建设 UI/UX 深度分析（主流程内） 工作流
 
 #### 涉及文件
 
-- 新增 `mobile-qa-workflow/ui-deep-dive/core/workflow.xml`
-- 新增 `mobile-qa-workflow/ui-deep-dive/core/workflow-model.yaml`
-- 新增 `mobile-qa-workflow/ui-deep-dive/core/default-config.yaml`
-- 新增 `mobile-qa-workflow/ui-deep-dive/phases/*`
-- 新增 `mobile-qa-workflow/ui-deep-dive/agents/*`
-- 新增 `mobile-qa-workflow/ui-deep-dive/templates/*`
-- 新增 `mobile-qa-workflow/ui-deep-dive/reference/*`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/core/workflow.xml`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/core/workflow-model.yaml`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/core/default-config.yaml`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/phases/*`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/agents/*`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/templates/*`
+- 新增 `mobile-qa-workflow/ui-ux-analysis/reference/*`
 - 修改 `mobile-qa-workflow/phases/p3-root-cause.md`
 - 修改 `mobile-qa-workflow/core/workflow.xml`
 - 修改 `mobile-qa-workflow/system-prompt.md`
 
 #### 具体修改内容
 
-1. 根据现有历史设计资料落地最小可运行的 UI Deep-Dive
+1. 根据现有历史设计资料落地最小可运行的 UI/UX 深度分析（主流程内）
 2. 在 `P3` 中加入 UI 专项路由条件
 3. 保持与 Functionality Deep-Dive 一致的回注接口
 
@@ -715,7 +715,7 @@ Batch C 负责真正做“结构收敛、产物瘦身、产品谱系补齐、评
 2. `C2` 专项阶段切换
 3. `C3` 专项编排与产物分级
 4. `C4` 文档与入口同步
-5. `C5` UI Deep-Dive
+5. `C5` UI/UX 深度分析（主流程内）
 6. `C6` eval 闭环
 
 ---
@@ -728,7 +728,7 @@ Batch C 负责真正做“结构收敛、产物瘦身、产品谱系补齐、评
 2. `P3 / P4 / P6` 动态路由已正式生效
 3. 专项角色与阶段已收敛
 4. 专项产物已分级
-5. `UI Deep-Dive` 已可运行
+5. `UI/UX 深度分析（主流程内）` 已可运行
 6. 评测框架可比较改造前后收益
 
 ---

@@ -2,7 +2,7 @@
 name: mobile-qa-workflow
 description: >-
   Mobile B2C 质量问题工作流统一入口。当用户上报 Android/iOS 应用任何质量问题时使用。
-  支持主链路动态 fan-out、Functionality Deep-Dive 与 UI Deep-Dive。
+  支持主链路动态 fan-out 与 Functionality Deep-Dive。
 ---
 
 # Mobile QA B2C Workflow 统一入口

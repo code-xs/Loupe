@@ -18,7 +18,6 @@
 | `core/workflow.xml` | 主编排逻辑 |
 | `phases/p1~p6-*.md` | 各阶段详细逻辑 |
 | `functionality-deep-dive/` | 功能疑难专项工作流 |
-| `ui-deep-dive/` | UI 疑难专项工作流 |
 
 ## 动态路由与状态恢复
 
@@ -38,11 +37,6 @@
 - 复合角色：`deep-dive-context-analyst`、`deep-dive-structure-analyst`、`deep-dive-race-and-isolation-analyst`、`deep-dive-arbiter`、`defensive-fix-architect`
 - 核心强制产物：`deep-dive-summary.md`、`functionality-deep-dive-rca.md`
 - 按需独立落盘：`environment-factor-report.md`、`deep-dive-topology.md`、`concurrency-analysis-report.md`
-
-### UI Deep-Dive
-- 最小角色：`ui-context-analyst`、`ui-structure-analyst`、`ui-render-and-interaction-analyst`、`ui-deep-dive-arbiter`
-- 核心产物：`ui-deep-dive-summary.md`、`ui-deep-dive-rca.md`
-- 适用场景：复杂布局错乱、异步重排、动画/交互时序、跨设备适配冲突
 
 ## Full 能力平台
 

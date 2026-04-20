@@ -12,7 +12,6 @@
     - spec_file: '{workspace_folder}/spec.md'
     - rca_report: '{workspace_folder}/rca-report.md'
     - deep_dive_summary: '{workspace_folder}/deep-dive/deep-dive-summary.md'
-    - ui_deep_dive_summary: '{workspace_folder}/ui-deep-dive/ui-deep-dive-summary.md'
     - output_file: '{workspace_folder}/fix-design.md'
     - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
@@ -20,7 +19,7 @@
     <workflow>
         <step n="1" goal="加载流程规范和上游产物">
             <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
-            <action>读取 {issue_card}、{spec_file}、{rca_report}；若存在则读取 {deep_dive_summary} 与 {ui_deep_dive_summary}</action>
+            <action>读取 {issue_card}、{spec_file}、{rca_report}；若存在则读取 {deep_dive_summary}</action>
             <load target="mobile-qa-workflow/reference/fix-strategies.md" prompt="加载修复策略知识库"/>
         </step>
 

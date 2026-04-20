@@ -37,7 +37,7 @@
 
 ## 0.1 角色口径
 
-- **业务角色**：`curator`、`investigator`、`challenger`、`arbiter`、`fix-proposer`、`coder-agent`、Functionality Deep-Dive 复合角色、UI Deep-Dive 复合角色。
+- **业务角色**：`curator`、`investigator`、`challenger`、`arbiter`、`fix-proposer`、`coder-agent`、Functionality Deep-Dive 复合角色。
 - **能力型 Agent**：仅提供检索或基础能力，不计入业务角色数量统计，例如 `search`。
 - **共享基座**：`challenger` / `arbiter` 通过共享基座 + 场景包装层工作，场景参数由调用处显式注入，不依赖内部模板渲染。
 
@@ -213,8 +213,8 @@ Verifying → implementation_mismatch → Fix-Designing
         <action>OBSERVE -> HYPOTHESIZE -> VERIFY -> SCORE -> CHAIN；SCORE 使用 shared-arbiter-base 中统一的 `final_confidence` 口径。</action>
     </step>
     <step n="5" goal="专项路由">
-        <action>功能复杂问题可进入 `Functionality Deep-Dive`；复杂 UI / 布局 / 渲染 / 交互问题可进入 `UI Deep-Dive`。</action>
-        <action>专项回注后，主 RCA 必须吸收专项摘要中的主根因、关键证据、置信度与附录建议。</action>
+        <action>功能复杂问题可进入 `Functionality Deep-Dive` 并回注专项摘要。</action>
+        <action>UI/UX 类问题不再启动独立专项子工作流；应在主 RCA 中使用 UI/UX 分析策略（布局树 / 资源链 / 渲染时序）完成分析。</action>
     </step>
     <step n="6" goal="客户端-服务端边界判定">
         <check if="功能类/网络类">抓包确认 → 判定归属 → 服务端问题 Handoff</check>
@@ -236,7 +236,7 @@ Verifying → implementation_mismatch → Fix-Designing
 ```xml
 <workflow>
     <step n="1" goal="加载流程规范和上游产物">
-        <action>读取 Issue Card、Spec、RCA Report，按需读取 `deep-dive-summary.md` / `ui-deep-dive-summary.md`，并加载修复策略知识库。</action>
+        <action>读取 Issue Card、Spec、RCA Report，按需读取 `deep-dive-summary.md`，并加载修复策略知识库。</action>
         <critical>优先治本策略；治标仅在真因短期无法修改时使用</critical>
     </step>
     <step n="2" goal="风险分层与动态 Proposal 路由">

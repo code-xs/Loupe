@@ -1,7 +1,0 @@
-parent_issue_id: null
-workspace_folder: null
-output_ui_deep_dive_rca: null
-output_ui_deep_dive_summary: null
-env_subagent: true
-workflow_version: "v1-ui"
-routing_policy_version: "abc-1"

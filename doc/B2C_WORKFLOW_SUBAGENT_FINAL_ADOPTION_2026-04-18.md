@@ -221,7 +221,7 @@
 
 ## 6.3 P2
 
-1. 建设 `UI Deep-Dive Workflow`
+1. 建设 `UI/UX 深度分析（主流程内） Workflow`
 2. 用 `eval-framework` 验证不同拆分策略的真实收益
 
 ---

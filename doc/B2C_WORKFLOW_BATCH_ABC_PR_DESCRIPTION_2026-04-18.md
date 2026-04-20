@@ -2,7 +2,7 @@
 
 > 日期：2026-04-18
 > 分支：`feature/coder_subagent`
-> 范围：共享基座、主链路动态路由、Functionality Deep-Dive 收敛、UI Deep-Dive、Eval 闭环
+> 范围：共享基座、主链路动态路由、Functionality Deep-Dive 收敛、UI/UX 深度分析（主流程内）、Eval 闭环
 
 ---
 
@@ -19,7 +19,7 @@
 - 主流程 `challenger / arbiter` 存在重复 prompt 逻辑，缺少共享协议基座
 - `P2 / P3 / P4 / P6` 的复杂度判断、动态 fan-out、失败回流有底座但未真正形成闭环
 - `Functionality Deep-Dive` 仍保留较多细粒度旧角色，`F4` 还借用主流程 `investigator`
-- 缺少可运行的 `UI Deep-Dive`
+- 缺少可运行的 `UI/UX 深度分析（主流程内）`
 - `eval-framework` 尚不能量化动态 fan-out、Deep-Dive 进入率和平均 agent 成本收益
 
 本次改造将上述能力按 5 个提交主题完成，并已推送到远程分支。
@@ -86,20 +86,20 @@
 
 ---
 
-### 3.3 新增最小可运行 `UI Deep-Dive`
+### 3.3 新增最小可运行 `UI/UX 深度分析（主流程内）`
 
 对应提交：
 
-- `fa17ef7` `feat(ui-deep-dive): add minimal runnable UI deep-dive workflow`
+- `fa17ef7` `feat(ui-ux-analysis): add minimal runnable UI deep-dive workflow`
 
 核心改动：
 
-- 新增完整 `ui-deep-dive` 目录
+- 新增完整 `ui-ux-analysis` 目录
 - 新增 UI 专项角色：
   - `ui-context-analyst`
   - `ui-structure-analyst`
   - `ui-render-and-interaction-analyst`
-  - `ui-deep-dive-arbiter`
+  - `ui-ux-analysis-arbiter`
 - 新增 `U1-U4` 阶段和 RCA / Summary 模板
 
 达成效果：
@@ -223,7 +223,7 @@
 ### 风险点
 
 - `P3 / P4` 动态路由启用后，行为不再是固定重模式
-- UI Deep-Dive 当前为最小可运行版本，后续仍可能继续补强
+- UI/UX 深度分析（主流程内） 当前为最小可运行版本，后续仍可能继续补强
 - Eval 指标依赖标准状态字段完整写回
 
 ---
@@ -243,7 +243,7 @@
 
 - `9863f29` `feat(workflow): add shared challenger and arbiter bases`
 - `58edc94` `feat(deep-dive): add composite functionality deep-dive workflow`
-- `fa17ef7` `feat(ui-deep-dive): add minimal runnable UI deep-dive workflow`
+- `fa17ef7` `feat(ui-ux-analysis): add minimal runnable UI deep-dive workflow`
 - `49401ce` `feat(main-workflow): enable dynamic routing and sync platform entrypoints`
 - `1d356df` `feat(eval): add fanout roi and agent efficiency metrics`
 
@@ -261,11 +261,11 @@
 - `shared-challenger-base / shared-arbiter-base` 的输入输出协议是否足够稳定
 - `p3-root-cause / p4-fix-design / p6-verification` 的状态回写字段是否闭环
 - Functionality Deep-Dive 复合角色切换后是否仍覆盖原关键分析能力
-- UI Deep-Dive 最小拓扑是否满足当前专项接入需求
+- UI/UX 深度分析（主流程内） 最小拓扑是否满足当前专项接入需求
 - Eval 指标是否与 `workflow-status` 的实际语义一致
 
 ---
 
 ## 10. 可直接粘贴的简版摘要
 
-本 PR 完成 Mobile QA Workflow 的 Batch A/B/C 核心落地：新增共享 `challenger/arbiter` 基座，正式启用 P2/P3/P4/P6 动态路由，收敛 Functionality Deep-Dive 为复合角色工作流，新增最小可运行 UI Deep-Dive，并补齐 `eval-framework` 对 fan-out ROI、Deep-Dive 进入率与平均 agent 成本的量化能力。
+本 PR 完成 Mobile QA Workflow 的 Batch A/B/C 核心落地：新增共享 `challenger/arbiter` 基座，正式启用 P2/P3/P4/P6 动态路由，收敛 Functionality Deep-Dive 为复合角色工作流，新增最小可运行 UI/UX 深度分析（主流程内），并补齐 `eval-framework` 对 fan-out ROI、Deep-Dive 进入率与平均 agent 成本的量化能力。

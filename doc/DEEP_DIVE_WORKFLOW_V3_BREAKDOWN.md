@@ -7,7 +7,7 @@
 > **范围**：  
 > - 主工作流改造点  
 > - `Functionality Deep-Dive` 子工作流文件清单  
-> - `UI Deep-Dive` 子工作流文件清单  
+> - `UI/UX 深度分析（主流程内）` 子工作流文件清单  
 
 ---
 
@@ -19,7 +19,7 @@
 
 1. 继续完成标准 Intake / Spec / 基础 RCA 分诊
 2. 判断是否应进入专项子工作流
-3. 路由到 `Functionality Deep-Dive` 或 `UI Deep-Dive`
+3. 路由到 `Functionality Deep-Dive` 或 `UI/UX 深度分析（主流程内）`
 4. 接收子工作流返回结果
 5. 将子工作流结论回注到主产物
 6. 驱动后续 `Fix Design / Fix Impl / Verification`
@@ -51,7 +51,7 @@
    - 在 `qa-root-cause` 阶段内部或其前置路由处，增加：
      - `standard-rca`
      - `functionality-deep-dive`
-     - `ui-deep-dive`
+     - `ui-ux-analysis`
 
 2. **子工作流执行节点**
    - 当命中专项路由时，调用对应子工作流入口，而不是继续执行标准深度 RCA。
@@ -80,7 +80,7 @@ specialized_artifacts: []
 - `specialized_workflow_mode`
   - `null`
   - `functionality-deep-dive`
-  - `ui-deep-dive`
+  - `ui-ux-analysis`
 - `specialized_workflow_status`
   - `pending`
   - `running`
@@ -121,7 +121,7 @@ specialized_last_summary: null
 output_specialized_summary: null
 output_functionality_deep_dive_rca: null
 output_functionality_defensive_fix: null
-output_ui_deep_dive_rca: null
+output_ui_ux_analysis_rca: null
 output_ui_fix_addendum: null
 ```
 
@@ -142,7 +142,7 @@ output_ui_fix_addendum: null
    - 在复杂度评估之后，新增一层专项路由：
      - 标准 RCA
      - Functionality Deep-Dive
-     - UI Deep-Dive
+     - UI/UX 深度分析（主流程内）
 
 2. **Functionality Deep-Dive 触发规则**
    - 主分类=功能
@@ -155,7 +155,7 @@ output_ui_fix_addendum: null
      - 生命周期耦合
      - 多模块业务联动
 
-3. **UI Deep-Dive 触发规则**
+3. **UI/UX 深度分析（主流程内） 触发规则**
    - 主分类=UI/UX
    - `complexity_level in {medium, complex}`
    - 且命中：
@@ -174,7 +174,7 @@ output_ui_fix_addendum: null
 
 5. **接收 summary**
    - 若子工作流成功：
-     - 读取 `deep-dive-summary.md` 或 `ui-deep-dive-summary.md`
+     - 读取 `deep-dive-summary.md` 或 `ui-ux-analysis-summary.md`
      - 生成标准 `rca-report.md`
    - 若失败：
      - 标记 `specialized_workflow_status = failed`
@@ -188,7 +188,7 @@ output_ui_fix_addendum: null
 
 ```markdown
 ### Specialized Workflow Inputs（可选）
-- **专项模式**: [functionality-deep-dive / ui-deep-dive / none]
+- **专项模式**: [functionality-deep-dive / ui-ux-analysis / none]
 - **专项触发依据**: [简述]
 - **补充输入清单**:
   - [APM / Layout Inspector / View Hierarchy / 约束导出 / 时序日志 / Feature Flag 快照]
@@ -207,7 +207,7 @@ output_ui_fix_addendum: null
 
 ```markdown
 ### Specialized Deep-Dive Summary（可选）
-- **专项模式**: [functionality-deep-dive / ui-deep-dive]
+- **专项模式**: [functionality-deep-dive / ui-ux-analysis]
 - **专项总结文件**: [路径]
 - **Primary Root Cause**: [...]
 - **Contributing Factors**: [...]
@@ -228,7 +228,7 @@ output_ui_fix_addendum: null
 
 ```markdown
 ### Specialized Fix Addendum（可选）
-- **专项模式**: [functionality-deep-dive / ui-deep-dive]
+- **专项模式**: [functionality-deep-dive / ui-ux-analysis]
 - **附录文件**: [defensive-fix-design.md / ui-fix-design-addendum.md]
 - **附录作用**: [防御性修复 / UI 专项修复]
 - **是否纳入主方案**: [是/否]
@@ -398,13 +398,13 @@ mobile-qa-workflow/
 
 ---
 
-## 三、UI Deep-Dive 子工作流文件清单
+## 三、UI/UX 深度分析（主流程内） 子工作流文件清单
 
 ### 3.1 建议目录结构
 
 ```text
 mobile-qa-workflow/
-  ui-deep-dive/
+  ui-ux-analysis/
     core/
     phases/
     agents/
@@ -419,89 +419,89 @@ mobile-qa-workflow/
 
 #### A. 入口与核心编排
 
-1. `ui-deep-dive/UI_DEEP_DIVE_WORKFLOW_V3.md`
+1. `ui-ux-analysis/UI_DEEP_DIVE_WORKFLOW_V3.md`
    - 子工作流总说明
    - 阶段定义
    - I/O 契约
    - 与主工作流集成方式
 
-2. `ui-deep-dive/core/workflow.xml`
+2. `ui-ux-analysis/core/workflow.xml`
    - UI 专项子工作流编排器
 
-3. `ui-deep-dive/core/workflow-model.yaml`
+3. `ui-ux-analysis/core/workflow-model.yaml`
    - U1 ~ U5 阶段序列
 
-4. `ui-deep-dive/core/workflow-status-template.yaml`
+4. `ui-ux-analysis/core/workflow-status-template.yaml`
    - UI 子工作流状态模板
 
-5. `ui-deep-dive/core/default-config.yaml`
+5. `ui-ux-analysis/core/default-config.yaml`
    - UI 子工作流默认配置
 
 ---
 
 #### B. 阶段文件
 
-1. `ui-deep-dive/phases/u1-context-matrix.md`
+1. `ui-ux-analysis/phases/u1-context-matrix.md`
    - 视觉上下文与适配矩阵重构
 
-2. `ui-deep-dive/phases/u2-layout-topology.md`
+2. `ui-ux-analysis/phases/u2-layout-topology.md`
    - 布局树与约束系统还原
 
-3. `ui-deep-dive/phases/u3-render-timeline.md`
+3. `ui-ux-analysis/phases/u3-render-timeline.md`
    - 渲染时序与异步重排剖析
 
-4. `ui-deep-dive/phases/u4-interaction-debate.md`
+4. `ui-ux-analysis/phases/u4-interaction-debate.md`
    - 手势/滚动/动画冲突与多 Agent 对抗
 
-5. `ui-deep-dive/phases/u5-ui-fix-design.md`
+5. `ui-ux-analysis/phases/u5-ui-fix-design.md`
    - UI 修复设计与防回归方案
 
 ---
 
 #### C. Agent 文件
 
-1. `ui-deep-dive/agents/ui-context-analyst.md`
+1. `ui-ux-analysis/agents/ui-context-analyst.md`
    - 适配矩阵与视觉上下文专家
 
-2. `ui-deep-dive/agents/layout-analyst.md`
+2. `ui-ux-analysis/agents/layout-analyst.md`
    - 布局树与约束分析专家
 
-3. `ui-deep-dive/agents/render-timing-analyst.md`
+3. `ui-ux-analysis/agents/render-timing-analyst.md`
    - 渲染时序专家
 
-4. `ui-deep-dive/agents/gesture-interaction-analyst.md`
+4. `ui-ux-analysis/agents/gesture-interaction-analyst.md`
    - 手势与交互冲突分析专家
 
-5. `ui-deep-dive/agents/challenger.md`
+5. `ui-ux-analysis/agents/challenger.md`
    - UI 专项质疑员
 
-6. `ui-deep-dive/agents/arbiter.md`
+6. `ui-ux-analysis/agents/arbiter.md`
    - UI 专项仲裁员
 
-7. `ui-deep-dive/agents/ui-fix-architect.md`
+7. `ui-ux-analysis/agents/ui-fix-architect.md`
    - UI 修复设计专家
 
 ---
 
 #### D. 模板文件
 
-1. `ui-deep-dive/templates/ui-context-matrix-report.md`
-2. `ui-deep-dive/templates/layout-topology-report.md`
-3. `ui-deep-dive/templates/render-timeline-report.md`
-4. `ui-deep-dive/templates/ui-deep-dive-rca.md`
-5. `ui-deep-dive/templates/ui-fix-design-addendum.md`
-6. `ui-deep-dive/templates/ui-deep-dive-summary.md`
+1. `ui-ux-analysis/templates/ui-context-matrix-report.md`
+2. `ui-ux-analysis/templates/layout-topology-report.md`
+3. `ui-ux-analysis/templates/render-timeline-report.md`
+4. `ui-ux-analysis/templates/ui-ux-analysis-rca.md`
+5. `ui-ux-analysis/templates/ui-fix-design-addendum.md`
+6. `ui-ux-analysis/templates/ui-ux-analysis-summary.md`
 
 ---
 
 #### E. 参考知识文件
 
-1. `ui-deep-dive/reference/ui-adaptation-matrix.md`
-2. `ui-deep-dive/reference/layout-debug-strategies.md`
-3. `ui-deep-dive/reference/render-timing-patterns.md`
-4. `ui-deep-dive/reference/gesture-conflict-patterns.md`
-5. `ui-deep-dive/reference/platform-ui-checklist.md`
-6. `ui-deep-dive/reference/ui-regression-test-patterns.md`
+1. `ui-ux-analysis/reference/ui-adaptation-matrix.md`
+2. `ui-ux-analysis/reference/layout-debug-strategies.md`
+3. `ui-ux-analysis/reference/render-timing-patterns.md`
+4. `ui-ux-analysis/reference/gesture-conflict-patterns.md`
+5. `ui-ux-analysis/reference/platform-ui-checklist.md`
+6. `ui-ux-analysis/reference/ui-regression-test-patterns.md`
 
 ---
 
@@ -516,8 +516,8 @@ mobile-qa-workflow/
 5. `phases/u2-layout-topology.md`
 6. `phases/u3-render-timeline.md`
 7. `phases/u4-interaction-debate.md`
-8. `templates/ui-deep-dive-summary.md`
-9. `templates/ui-deep-dive-rca.md`
+8. `templates/ui-ux-analysis-summary.md`
+9. `templates/ui-ux-analysis-rca.md`
 
 ---
 
@@ -541,7 +541,7 @@ mobile-qa-workflow/
 - 和现有积累最接近
 - 业务逻辑疑难收益最高
 
-### Phase C：再落 UI Deep-Dive
+### Phase C：再落 UI/UX 深度分析（主流程内）
 
 原因：
 
@@ -573,7 +573,7 @@ mobile-qa-workflow/
 建议优先级：
 
 1. `Functionality Deep-Dive`
-2. `UI Deep-Dive`
+2. `UI/UX 深度分析（主流程内）`
 
 ### 5.3 一句话总结
 

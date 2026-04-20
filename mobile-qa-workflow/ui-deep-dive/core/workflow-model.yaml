@@ -1,6 +1,0 @@
-# UI Deep-Dive Workflow - Stage Sequence
-workflow_step:
-- 1. u1-context-and-visual-baseline
-- 2. u2-layout-topology
-- 3. u3-render-timing-and-interaction
-- 4. u4-ui-ruling

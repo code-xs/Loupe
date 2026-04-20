@@ -103,7 +103,7 @@
 
 ### P2：最后扩展产品谱系和评测闭环
 
-7. 增补 UI Deep-Dive 工作流
+7. 增补 UI/UX 深度分析（主流程内） 工作流
 8. 建立改造前后评测基线与回归对比
 
 ---
@@ -123,7 +123,7 @@
 | WP-08 | 专项阶段与编排收敛 | P1 | 让角色结构、阶段结构和子工作流契约一致 |
 | WP-09 | 专项产物分级改造 | P1 | 降低文件风暴，保留核心审计产物 |
 | WP-10 | 平台入口与文档同步 | P1 | 避免 `SKILL` / `system-prompt` / 平台文档口径漂移 |
-| WP-11 | UI Deep-Dive 预研与落地 | P2 | 补齐 B2C 产品谱系 |
+| WP-11 | UI/UX 深度分析（主流程内） 预研与落地 | P2 | 补齐 B2C 产品谱系 |
 | WP-12 | 评测闭环建设 | P2 | 用指标验证裁剪收益 |
 
 ---
@@ -621,7 +621,7 @@
 
 ---
 
-## 4.11 WP-11 UI Deep-Dive 预研与落地
+## 4.11 WP-11 UI/UX 深度分析（主流程内） 预研与落地
 
 ### 目标
 
@@ -631,13 +631,13 @@
 
 #### 新增
 
-- `mobile-qa-workflow/ui-deep-dive/core/workflow.xml`
-- `mobile-qa-workflow/ui-deep-dive/core/workflow-model.yaml`
-- `mobile-qa-workflow/ui-deep-dive/core/default-config.yaml`
-- `mobile-qa-workflow/ui-deep-dive/phases/*`
-- `mobile-qa-workflow/ui-deep-dive/agents/*`
-- `mobile-qa-workflow/ui-deep-dive/templates/*`
-- `mobile-qa-workflow/ui-deep-dive/reference/*`
+- `mobile-qa-workflow/ui-ux-analysis/core/workflow.xml`
+- `mobile-qa-workflow/ui-ux-analysis/core/workflow-model.yaml`
+- `mobile-qa-workflow/ui-ux-analysis/core/default-config.yaml`
+- `mobile-qa-workflow/ui-ux-analysis/phases/*`
+- `mobile-qa-workflow/ui-ux-analysis/agents/*`
+- `mobile-qa-workflow/ui-ux-analysis/templates/*`
+- `mobile-qa-workflow/ui-ux-analysis/reference/*`
 
 #### 修改
 
@@ -648,7 +648,7 @@
 ### 改造步骤
 
 1. 定义 UI 疑难的触发条件
-2. 设计 UI Deep-Dive 的最小闭环角色与产物
+2. 设计 UI/UX 深度分析（主流程内） 的最小闭环角色与产物
 3. 在 P3 中补充专项路由入口
 4. 与 Functionality Deep-Dive 保持一致的编排和回注接口
 
@@ -728,7 +728,7 @@
 
 ## 批次 D：中长期增强
 
-- WP-11 UI Deep-Dive 预研与落地
+- WP-11 UI/UX 深度分析（主流程内） 预研与落地
 - WP-12 评测闭环建设
 
 ---

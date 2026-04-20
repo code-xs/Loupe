@@ -493,7 +493,7 @@
 
 ## 6.2 专项路由只覆盖功能疑难，整体产品谱系未闭合
 
-历史架构提案里已经提出 `UI Deep-Dive Workflow`，但当前仓库只真正落地了 `Functionality Deep-Dive Workflow`。
+历史架构提案里已经提出 `UI/UX 深度分析（主流程内） Workflow`，但当前仓库只真正落地了 `Functionality Deep-Dive Workflow`。
 
 这会导致：
 
@@ -702,7 +702,7 @@ P3/P4 对中等复杂度问题也容易进入双 investigator / 双 proposer + c
 
 1. 保留主工作流 6 核心角色
 2. `Functionality Deep-Dive` 收敛为 4 角色
-3. 独立建设 `UI Deep-Dive`
+3. 独立建设 `UI/UX 深度分析（主流程内）`
 4. 用统一评测框架比较不同拆分策略的收益
 
 ---
@@ -749,7 +749,7 @@ P3/P4 对中等复杂度问题也容易进入双 investigator / 双 proposer + c
 
 ### P2
 
-1. 独立建设 `UI Deep-Dive Workflow`
+1. 独立建设 `UI/UX 深度分析（主流程内） Workflow`
 2. 用 `eval-framework` 验证不同 agent 拆分方案的真实收益，而不是凭直觉裁剪
 
 ---

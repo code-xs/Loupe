@@ -17,7 +17,7 @@
 2. **新增独立专项子工作流**，负责复杂场景下的深度分析
 3. **按问题类型拆分专项子工作流**
    - `Functionality Deep-Dive Workflow`：面向业务逻辑、状态机、竞态、缓存一致性、生命周期耦合类疑难问题
-   - `UI Deep-Dive Workflow`：面向布局错乱、异步重排、渲染时序、约束冲突、适配矩阵、动画/手势冲突类疑难问题
+   - `UI/UX 深度分析（主流程内） Workflow`：面向布局错乱、异步重排、渲染时序、约束冲突、适配矩阵、动画/手势冲突类疑难问题
 4. **主工作流只做路由与结果回注**，不承担专项深度分析本体
 
 ### 1.2 为什么 V3 比 V2 更优
@@ -45,7 +45,7 @@ flowchart TD
 
     C -->|普通问题| D[主工作流标准 RCA 路径]
     C -->|复杂业务逻辑疑难| E[Functionality Deep-Dive 子工作流]
-    C -->|复杂 UI 疑难| F[UI Deep-Dive 子工作流]
+    C -->|复杂 UI 疑难| F[UI/UX 深度分析（主流程内） 子工作流]
 
     E --> G[Deep-Dive RCA 结果回注主工作流]
     F --> G
@@ -122,7 +122,7 @@ flowchart TD
 - 生命周期耦合
 - 多模块业务链异常
 
-#### 子工作流 B：UI Deep-Dive
+#### 子工作流 B：UI/UX 深度分析（主流程内）
 
 聚焦：
 
@@ -149,11 +149,11 @@ flowchart TD
 
 - 普通 RCA
 - Functionality Deep-Dive
-- UI Deep-Dive
+- UI/UX 深度分析（主流程内）
 
 ### 4.2 路由判定矩阵
 
-| 条件 | 普通 RCA | Functionality Deep-Dive | UI Deep-Dive |
+| 条件 | 普通 RCA | Functionality Deep-Dive | UI/UX 深度分析（主流程内） |
 |------|----------|--------------------------|--------------|
 | 主分类=功能 | 可能 | 高概率 | 否 |
 | 主分类=UI/UX | 可能 | 否 | 高概率 |
@@ -178,7 +178,7 @@ flowchart TD
    - Crash 栈指向系统底层但怀疑业务上层
 3. 快速路径反事实校验失败，且异常不是纯 UI 结构问题
 
-### 4.4 UI Deep-Dive 触发条件
+### 4.4 UI/UX 深度分析（主流程内） 触发条件
 
 满足以下任一组合即可触发：
 
@@ -251,7 +251,7 @@ stateDiagram-v2
 
 ---
 
-## 六、UI Deep-Dive 子工作流设计
+## 六、UI/UX 深度分析（主流程内） 子工作流设计
 
 ### 6.1 定位
 
@@ -320,14 +320,14 @@ stateDiagram-v2
 - `ui-context-matrix-report.md`
 - `layout-topology-report.md`
 - `render-timeline-report.md`
-- `ui-deep-dive-rca.md`
+- `ui-ux-analysis-rca.md`
 - `ui-fix-design-addendum.md`
 
 ### 6.5 回注主工作流的精简结果
 
 建议回注：
 
-- `ui-deep-dive-summary.md`
+- `ui-ux-analysis-summary.md`
 
 包含：
 
@@ -382,7 +382,7 @@ stateDiagram-v2
 如果允许改主状态机，建议新增：
 
 ```yaml
-specialized_workflow_mode: null      # functionality-deep-dive | ui-deep-dive | null
+specialized_workflow_mode: null      # functionality-deep-dive | ui-ux-analysis | null
 specialized_workflow_status: null    # pending | running | completed | failed
 specialized_artifacts: []
 ```
@@ -416,14 +416,14 @@ specialized_artifacts: []
 - `defensive-fix-design.md`
 - `deep-dive-summary.md`
 
-#### UI Deep-Dive 产物
+#### UI/UX 深度分析（主流程内） 产物
 
 - `ui-context-matrix-report.md`
 - `layout-topology-report.md`
 - `render-timeline-report.md`
-- `ui-deep-dive-rca.md`
+- `ui-ux-analysis-rca.md`
 - `ui-fix-design-addendum.md`
-- `ui-deep-dive-summary.md`
+- `ui-ux-analysis-summary.md`
 
 ### 8.3 回注映射关系
 
@@ -431,7 +431,7 @@ specialized_artifacts: []
 |--------------|------------|
 | `deep-dive-summary.md` | `rca-report.md` |
 | `defensive-fix-design.md` | `fix-design.md` |
-| `ui-deep-dive-summary.md` | `rca-report.md` |
+| `ui-ux-analysis-summary.md` | `rca-report.md` |
 | `ui-fix-design-addendum.md` | `fix-design.md` |
 
 ---
@@ -447,7 +447,7 @@ specialized_artifacts: []
 - `arbiter`
 - `defensive-fix-architect`
 
-### 9.2 UI Deep-Dive Agent 体系
+### 9.2 UI/UX 深度分析（主流程内） Agent 体系
 
 - `ui-context-analyst`
 - `layout-analyst`
@@ -497,7 +497,7 @@ specialized_artifacts: []
 - 当前已有设计基础
 - 和现有文档积累最接近
 
-### Phase B：再落 UI Deep-Dive 独立子工作流
+### Phase B：再落 UI/UX 深度分析（主流程内） 独立子工作流
 
 原因：
 
@@ -520,7 +520,7 @@ specialized_artifacts: []
 
 1. **主工作流保留**
 2. **Functionality Deep-Dive 独立化**
-3. **UI Deep-Dive 独立化**
+3. **UI/UX 深度分析（主流程内） 独立化**
 4. **通过主工作流分诊与回注完成统一闭环**
 
 ### 12.2 一句话总结

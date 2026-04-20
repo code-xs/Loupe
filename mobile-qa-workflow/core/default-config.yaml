@@ -23,8 +23,6 @@ output_concurrency_report: null
 output_deep_dive_rca: null
 output_deep_dive_summary: null
 output_defensive_fix_design: null
-output_ui_deep_dive_rca: null
-output_ui_deep_dive_summary: null
 
 env_file_system: true
 env_git: true

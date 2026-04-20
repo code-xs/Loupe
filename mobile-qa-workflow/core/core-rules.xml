@@ -85,12 +85,6 @@
                         <agent name="challenger" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
                         <agent name="arbiter" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
                     </agent-group>
-                    <agent-group name="ui-deep-dive" desc="UI Deep-Dive Agent（mobile-qa-workflow/ui-deep-dive/agents/）">
-                        <agent name="ui-context-analyst" scenario="UI 现场重建">视觉基线、环境与设备差异重建</agent>
-                        <agent name="ui-structure-analyst" scenario="布局拓扑">约束、层级、尺寸与资源链分析</agent>
-                        <agent name="ui-render-and-interaction-analyst" scenario="渲染与交互">重排、动画、手势与渲染时序分析</agent>
-                        <agent name="ui-deep-dive-arbiter" scenario="UI 裁定">聚合 UI 证据、输出最终专项结论</agent>
-                    </agent-group>
                 </available-agents>
             </tag>
             <tag name="workflow-status-routing">

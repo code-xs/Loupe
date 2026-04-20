@@ -368,8 +368,6 @@ class Coordinator:
             total += fanout_agents.get(fix_strategy_mode, 0)
         if specialized_mode == "functionality-deep-dive":
             total += 4
-        elif specialized_mode == "ui-deep-dive":
-            total += 3
         return total
 
     @staticmethod

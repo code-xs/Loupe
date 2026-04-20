@@ -218,8 +218,6 @@ class LLMJudge:
             "deep-dive/deep-dive-summary.md",
             "deep-dive/functionality-deep-dive-rca.md",
             "deep-dive/defensive-fix-design.md",
-            "ui-deep-dive/ui-deep-dive-summary.md",
-            "ui-deep-dive/ui-deep-dive-rca.md",
             "baseline-output.md",
         ]
         parts = []
@@ -388,8 +386,6 @@ class LLMJudge:
             total += mapping.get(fix_strategy_mode, 0)
         if specialized_mode == "functionality-deep-dive":
             total += 4
-        elif specialized_mode == "ui-deep-dive":
-            total += 3
         return total
 
     @staticmethod

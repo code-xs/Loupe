@@ -155,7 +155,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
     <step n="6" goal="专项子工作流路由决策">
         <action>评估是否需要专项：
             - 功能类且复杂度高，或涉及状态机 / 生命周期 / 缓存一致性 / 并发的复合冲突 -> functionality-deep-dive
-            - UI/UX 类且问题涉及布局拓扑、异步重排、渲染时序、交互冲突 -> ui-deep-dive
+            - UI/UX 类问题不再启动独立专项子工作流；应在主 RCA 中使用 UI/UX 分析策略（布局树 / 资源链 / 渲染时序）完成分析。
         </action>
         <check if="满足 functionality-deep-dive 触发条件">
             <action>创建子工作区 {workspace_folder}/deep-dive/，更新 {workflow_status}：specialized_workflow.mode = functionality-deep-dive, specialized_workflow.status = DD-InProgress, specialized_workflow.sub_workspace = {workspace_folder}/deep-dive/, specialized_workflow.trigger_reason = functional_complexity_or_conflict</action>
@@ -167,25 +167,11 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 - context_bundle: {context_bundle}
                 - workflow_status: {workspace_folder}/deep-dive/workflow-status.yaml"/>
         </check>
-        <check if="满足 ui-deep-dive 触发条件">
-            <action>创建子工作区 {workspace_folder}/ui-deep-dive/，更新 {workflow_status}：specialized_workflow.mode = ui-deep-dive, specialized_workflow.status = DD-InProgress, specialized_workflow.sub_workspace = {workspace_folder}/ui-deep-dive/, specialized_workflow.trigger_reason = ui_complexity_or_render_conflict</action>
-            <load target="mobile-qa-workflow/ui-deep-dive/core/workflow.xml" prompt="加载并执行 UI Deep-Dive 子工作流，传递参数：
-                - config_source: {config_source}
-                - workspace_folder: {workspace_folder}/ui-deep-dive
-                - issue_card: {issue_card}
-                - spec_file: {spec_file}
-                - context_bundle: {context_bundle}
-                - workflow_status: {workspace_folder}/ui-deep-dive/workflow-status.yaml"/>
-        </check>
     </step>
 
     <step n="7" goal="回注专项结论并合并 RCA">
         <check if="{workspace_folder}/deep-dive/deep-dive-summary.md 存在">
             <action>读取 {workspace_folder}/deep-dive/deep-dive-summary.md 与 functionality-deep-dive-rca.md，合并主 RCA；若专项与主路径一致则提升置信度，若冲突则以专项为更深输入并解释覆盖理由。</action>
-            <action>更新 {workflow_status}：specialized_workflow.status = DD-Completed, specialized_workflow.merge_strategy = merged-into-main-rca</action>
-        </check>
-        <check if="{workspace_folder}/ui-deep-dive/ui-deep-dive-summary.md 存在">
-            <action>读取 {workspace_folder}/ui-deep-dive/ui-deep-dive-summary.md 与 ui-deep-dive-rca.md，将布局 / 渲染 / 交互专项结论回注主 RCA。</action>
             <action>更新 {workflow_status}：specialized_workflow.status = DD-Completed, specialized_workflow.merge_strategy = merged-into-main-rca</action>
         </check>
     </step>

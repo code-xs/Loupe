@@ -31,7 +31,7 @@ case_metadata:
   expected_route:
     type: enum
     required: true
-    values: [standard-rca, functionality-deep-dive, ui-deep-dive]
+    values: [standard-rca, functionality-deep-dive]
   expected_fanout_mode:
     type: enum
     required: false

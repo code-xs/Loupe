@@ -6,7 +6,7 @@
 ### 关联信息
 - **Root Cause Report ID**: [关联]
 - **根因置信度**: [0.XX] ([High/Medium/Low])
-- **专项子工作流**: [未触发 / functionality-deep-dive / ui-deep-dive]
+- **专项子工作流**: [未触发 / functionality-deep-dive]
 - **Fix Strategy Mode**: [single-proposer / challenged-proposer / contested-arbitrated]
 - **Fix Risk Level**: [low / medium / high]
 
@@ -77,7 +77,6 @@
 
 ### 专项附录（按需填写）
 - **Functionality Deep-Dive**: [如触发则引用 `deep-dive-summary.md` / `defensive-fix-design.md`]
-- **UI Deep-Dive**: [如触发则引用 `ui-deep-dive-summary.md`]
 
 ### 回归测试设计
 - [TC1] **直接验证**: ...

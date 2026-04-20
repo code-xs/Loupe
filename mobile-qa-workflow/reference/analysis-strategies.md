@@ -50,7 +50,7 @@
 - `Strategy-LayoutTree`
 - `Strategy-ResourceChain`
 - `Strategy-RenderTiming`
-- 若布局/渲染/交互时序问题显著且 `complex`，优先切换到 `ui-deep-dive`
+- 布局/渲染/交互时序问题在主 RCA 内完成分析，不再切换到独立 UI 专项子工作流
 
 ### 网络类
 - `Strategy-RequestChain`

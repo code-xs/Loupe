@@ -6,7 +6,7 @@
 ## 子文档清单
 
 - PR-1 · schema 协议层 → [`pr1-schema-protocol.md`](./pr1-schema-protocol.md)
-- PR-2 · 编排器 step-pause 双写 + step3 传参 → 待展开
+- PR-2 · 编排器 step-pause 双写 + step3 传参 → [`pr2-orchestrator-step-pause.md`](./pr2-orchestrator-step-pause.md)
 - PR-3 · P2 Non-Bug 闭环 + Context-Curating → 待展开
 - PR-4 · P3/P4/P6 ABORT + 字段隔离 + base_score → 待展开
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → 待展开

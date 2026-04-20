@@ -490,7 +490,7 @@ flowchart TD
 > 合入顺序（D9）：**PR-1 → PR-2 → PR-4 → PR-3 → PR-5 → PR-6 → PR-7 → PR-8**。
 
 - PR-1 · schema 协议层 → [`construction-plans/v2.2/pr1-schema-protocol.md`](./construction-plans/v2.2/pr1-schema-protocol.md)
-- PR-2 · 编排器 step-pause 双写 + step3 传参 → _待展开_
+- PR-2 · 编排器 step-pause 双写 + step3 传参 → [`construction-plans/v2.2/pr2-orchestrator-step-pause.md`](./construction-plans/v2.2/pr2-orchestrator-step-pause.md)
 - PR-3 · P2 Non-Bug 闭环 + Context-Curating → _待展开_
 - PR-4 · P3/P4/P6 ABORT + 字段隔离 + base_score → _待展开_
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → _待展开_

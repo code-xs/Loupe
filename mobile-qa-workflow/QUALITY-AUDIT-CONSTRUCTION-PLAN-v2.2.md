@@ -498,7 +498,7 @@ flowchart TD
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → [`construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md`](./construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md)（**实施期合并**到同一子文档；§3 PR-5 设计描述本体不动）
 - PR-6 · agents/templates 治理（最小子集） → [`construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md`](./construction-plans/v2.2/pr5-6-deep-dive-and-agents-templates.md)（**实施期合并**到同一子文档；§3 PR-6 设计描述本体不动）
 - PR-7 · SKILL/system-prompt/PLATFORM-GUIDE 同步 → _待展开_
-- PR-8 · CI + install 整合 → _待展开_
+- PR-8 · CI + install 整合 → [`construction-plans/v2.2/pr8-ci-install-integration.md`](./construction-plans/v2.2/pr8-ci-install-integration.md)
 
 ---
 

@@ -47,6 +47,9 @@
             <action>确定 Spec 来源优先级：PRD(1) > 设计稿(2) > 竞品(3) > 用户口述(4)</action>
             <check if="Spec 存在模糊性或来源冲突">
                 <action>标记 [Spec-Uncertain]，列出多种可能的 Expected Behavior</action>
+                <!-- ⚠️ v4.2 遗留 #6：本内联 <step-pause> 与编排器 step 4 case Spec-Uncertain
+                     重复弹窗（已知 bug）；按 D14 收窄声明，v4.1 暂不动以避免 scope creep，
+                     v4.2 整体迁出 phase 文件，由编排器统一调度。 -->
                 <step-pause title="Spec 存在歧义，请确认 Expected Behavior：
 {spec_options}
 ">
@@ -59,6 +62,41 @@
                 </step-pause>
             </check>
             <action>逐项检查 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
+
+            <!-- ──────────────────────────────────────────────────────────────────
+                 v4.1 / B2 / B1* P2 / D14 / D17：Non-Bug 早退三步序列
+                 ──────────────────────────────────────────────────────────────────
+                 当 step 4 判定为 Non-Bug 时：
+                   1) 生成 Non-Bug 判定文本并写入 workflow_status.non_bug_context
+                      （供编排器 case Non-Bug 的 step-pause 标题占位 {non_bug_context} 使用）
+                   2) 设 current_state = Non-Bug
+                   3) 设运行时变量 current_phase_result = ABORT
+                 退出 phase（不再继续 step 5-9）；编排器 step 4 接管：
+                   - 不追加 qa-spec-definition 到 stepsCompleted（ABORT 分支）
+                   - 进入 case Non-Bug，由编排器统一发起确认 step-pause
+                 D14 合规：本 PR **不新增** <step-pause>；phase 内现存的 1 处
+                 Spec-Uncertain <step-pause> 作为 v4.2 遗留 #6 保持不动。
+                 ────────────────────────────────────────────────────────────────── -->
+            <check if="判定为 Non-Bug（命中 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate 之一）">
+                <action>生成 Non-Bug Resolution Report 文本：包含
+                        - 判定类别（5 选 1）
+                        - 判定依据（对应 Spec 条款 / 复现路径 / 环境快照锚点）
+                        - 沟通建议（一段面向 reporter 的回复要点，便于 step-pause 用户决策）
+                        - 改进建议（可选；如对应 UX 工单 / Feature Request / 文档改进）</action>
+
+                <action>更新 {workflow_status}：non_bug_context = {上述 Non-Bug Resolution Report 文本}
+                        （D17：该字段是编排器 case Non-Bug step-pause 标题占位的唯一数据源；
+                         文本应足够 self-contained，使用户仅凭 step-pause 标题即可做出 Accept / Reflow 决策）</action>
+
+                <action>更新 {workflow_status}：current_state = Non-Bug</action>
+
+                <action>设置 current_phase_result = ABORT
+                        （D1：current_phase_result 是运行时变量，不入持久化 schema；
+                         本动作必须在返回编排器之前显式赋值，否则编排器 step 4 会将
+                         qa-spec-definition 错误追加到 stepsCompleted，B1* 主链路根因复发）</action>
+
+                <action>退出 phase（不再继续 step 5-9）</action>
+            </check>
         </step>
 
         <step n="5" goal="输出复杂度判定与建议 Fan-out">
@@ -92,7 +130,9 @@
         </step>
 
         <step n="7" goal="上下文策展">
-            <action>更新 {workflow_status}：current_state = Context-Curating</action>
+            <action>更新 {workflow_status}：current_state = Context-Curating
+                    （C5：Context-Curating 是策展执行中的中间态，不引发 ABORT；
+                     仅当下方 curation_confidence < 0.4 才转入 Curation-Failed 早退）</action>
             <check if="{env_subagent} == true">
                 <invoke-subagent subagent_type="curator" subagent_prompt="
                     <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
@@ -104,7 +144,35 @@
             <check if="{env_subagent} == false">
                 <action>执行单对话策展降级模式：主 Agent 自行完成 Curator 的 5 项能力。</action>
             </check>
-            <action>读取 curation_confidence：>=0.7 正常继续；0.4-0.7 标记 [Curation-Partial]；<0.4 则 current_state = Curation-Failed。</action>
+
+            <!-- ──────────────────────────────────────────────────────────────────
+                 v4.1 / C5 / B1* 兜底：curation_confidence 三分支显式化
+                 ──────────────────────────────────────────────────────────────────
+                 v3 把三个分支折叠为一条自然语言 <action>，导致 "<0.4 → Curation-Failed"
+                 仅写状态而未触发早退（B1* 漏标 ABORT），编排器 step 4 会把
+                 qa-spec-definition 错误追加到 stepsCompleted，与 B1* 同源 bug。
+                 本变更点把三分支显式化，并在 Curation-Failed 分支补齐 ABORT 早退。
+                 ────────────────────────────────────────────────────────────────── -->
+            <action>读取 curation_confidence</action>
+            <switch condition="curation_confidence">
+                <case if=">= 0.7">
+                    <action>正常继续，进入 step 8</action>
+                </case>
+                <case if=">= 0.4 且 < 0.7">
+                    <action>在策展报告中标记 [Curation-Partial]，正常继续进入 step 8
+                            （部分置信度路径不早退；后续 step 9 仍输出三件套）</action>
+                </case>
+                <case if="< 0.4">
+                    <action>更新 {workflow_status}：current_state = Curation-Failed
+                            （C5：Curation-Failed 是 PR-1 schema 权威枚举集合内合法状态，
+                             与 system-prompt.md Phase 2 字段集对齐）</action>
+                    <action>设置 current_phase_result = ABORT
+                            （D1 / B1* 兜底：与变更点 P2-1 同协议；不显式标 ABORT 会让
+                             编排器把 qa-spec-definition 误追加到 stepsCompleted，
+                             导致后续重入策展时 stepsCompleted 失锚）</action>
+                    <action>退出 phase（不再继续 step 8-9）</action>
+                </case>
+            </switch>
         </step>
 
         <step n="8" goal="二维证据分级与 Bundle 生成">

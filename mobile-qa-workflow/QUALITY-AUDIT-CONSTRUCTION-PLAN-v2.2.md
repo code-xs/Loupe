@@ -493,7 +493,7 @@ flowchart TD
 
 - PR-1 · schema 协议层 → [`construction-plans/v2.2/pr1-schema-protocol.md`](./construction-plans/v2.2/pr1-schema-protocol.md)
 - PR-2 · 编排器 step-pause 双写 + step3 传参 → [`construction-plans/v2.2/pr2-orchestrator-step-pause.md`](./construction-plans/v2.2/pr2-orchestrator-step-pause.md)
-- PR-3 · P2 Non-Bug 闭环 + Context-Curating → _待展开_
+- PR-3 · P2 Non-Bug 闭环 + Context-Curating → [`construction-plans/v2.2/pr3-p2-non-bug-context-curating.md`](./construction-plans/v2.2/pr3-p2-non-bug-context-curating.md)
 - PR-4 · P3/P4/P6 ABORT(6) + 字段隔离 + C2 角色驱动注入 → [`construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md`](./construction-plans/v2.2/pr4-phase-abort-fanout-isolation.md)（v2.0 子文档 + v2.3 主文档微调，2026-04-20）
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → _待展开_
 - PR-6 · agents/templates 治理（最小子集） → _待展开_

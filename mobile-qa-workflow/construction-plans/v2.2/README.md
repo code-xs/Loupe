@@ -7,7 +7,7 @@
 
 - PR-1 · schema 协议层 → [`pr1-schema-protocol.md`](./pr1-schema-protocol.md)
 - PR-2 · 编排器 step-pause 双写 + step3 传参 → [`pr2-orchestrator-step-pause.md`](./pr2-orchestrator-step-pause.md)
-- PR-3 · P2 Non-Bug 闭环 + Context-Curating → 待展开
+- PR-3 · P2 Non-Bug 闭环 + Context-Curating → [`pr3-p2-non-bug-context-curating.md`](./pr3-p2-non-bug-context-curating.md)
 - PR-4 · P3/P4/P6 ABORT + 字段隔离 + base_score → [`pr4-phase-abort-fanout-isolation.md`](./pr4-phase-abort-fanout-isolation.md)
 - PR-5 · Deep-Dive 落盘 + step-pause 现状盘点 + allowlist → 待展开
 - PR-6 · agents/templates 治理（最小子集） → 待展开

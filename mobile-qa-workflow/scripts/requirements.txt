@@ -1,0 +1,8 @@
+# mobile-qa-workflow scripts/ 目录的 Python 依赖
+# 主仓库无 Python 依赖管理（install.sh 仅做 skill 软链），本文件作为 scripts/ 子目录
+# 的最小依赖锚点，供 PR-1 迁移脚本与后续脚本共用。
+#
+# 安装方式：
+#   pip install -r mobile-qa-workflow/scripts/requirements.txt
+
+ruamel.yaml>=0.17    # migrate-workflow-status-v3-to-v4.py：保留注释/缩进的 YAML 读写

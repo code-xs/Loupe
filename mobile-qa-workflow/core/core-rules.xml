@@ -22,8 +22,18 @@
     </WORKFLOW-RULES>
 
     <supported-tags desc="Mobile QA Workflow 支持的标签">
+        <!--
+          标签白名单边界声明（v4.1 / D3）：
+          本白名单仅约束 <flow>/<task> 内部 DSL 标签；元数据标签（<llm>/<mandate>/
+          <agent-taxonomy>/<human-review-protocol>/<trigger>/<output-format> 等）不在
+          LLM 解析校验范围内，PR-8 CI 也不对元数据标签做白名单守门。
+          协议级元标签（<input-protocol>/<workflow-result-protocol>）同样不在 DSL 白名单
+          管控范围内，由编排器与文档约定其语义；PR-8 CI 不做元素白名单校验
+          （v1.2 review Finding #3 收口）。
+        -->
         <structural>
             <tag name="flow"><rule>定义工作流程的顶层容器</rule></tag>
+            <tag name="task"><rule>在 phase 文件内定义可调度的子任务容器，与 flow 同级</rule></tag>
             <tag name="step">
                 <rules>
                     <rule>定义步骤编号和目标</rule>
@@ -95,12 +105,101 @@
                 </rules>
             </tag>
             <tag name="goto"><rule>跳转到指定步骤（用于回退和循环）</rule><params><param name="step">目标步骤编号</param></params></tag>
-            <tag name="step-pause"><rules><rule>强制触发硬停顿，等待用户确认后才能继续</rule><rule>将 title 和 option 输出在纯文本回复中</rule><rule>输出后立即结束当前回复，未收到用户指令前禁止执行后续步骤</rule></rules><params><param name="title">停顿标题</param><param name="option">停顿选项</param></params></tag>
+            <tag name="step-pause">
+                <rules>
+                    <rule>强制触发硬停顿，等待用户确认后才能继续</rule>
+                    <rule>将 title 和 option 输出在纯文本回复中</rule>
+                    <rule>输出后立即结束当前回复，未收到用户指令前禁止执行后续步骤</rule>
+                    <rule critical="true" id="step-pause-scope">
+                        调度作用域约束（v4.1 / D14）：
+                        &lt;step-pause&gt; 仅允许出现在 core/workflow.xml 编排器 step 4 内
+                        （按 current_state 路由触发）；phase 文件
+                        （phases/**、functionality-deep-dive/phases/**）禁止内联
+                        &lt;step-pause&gt;。phase 早退应通过
+                          &lt;action&gt;更新 {workflow_status}：current_state = &lt;stop_state&gt;&lt;/action&gt;
+                          &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt;
+                        让编排器接管，由编排器 step 4 对应 case 统一触发 step-pause。
+                        例外清单见 mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
+                        （v4.2 遗留 #6 治理目标，PR-5 维护、PR-8 CI 消费）。
+                    </rule>
+                </rules>
+                <params>
+                    <param name="title" required="true">
+                        停顿标题（必填）。最后一行必须追加 "请用 &lt;key&gt;=&lt;value&gt; 回复"，
+                        其中 &lt;key&gt; 必须与 result_field 同名，&lt;value&gt; 必须落在 allowed_values 内。
+                    </param>
+                    <param name="result_field" required="true">
+                        本停顿点用户回复写入的字段名（必填）。在 core/workflow-status-template.yaml
+                        的顶层镜像白名单内时由编排器双写到 workflow_status.&lt;result_field&gt;；
+                        总是写入 workflow_status.user_inputs.&lt;result_field&gt;。
+                    </param>
+                    <param name="allowed_values" required="true">
+                        合法回复值白名单（必填，使用 "|" 分隔）。例如 "Accept|Reflow"。
+                        编排器解析失败时回显该白名单。
+                    </param>
+                    <param name="option" required="false" cardinality="0..*">
+                        停顿选项（可选，0..*）。每个 &lt;option&gt; 标注一行可选回复语义，
+                        其 action 属性形式必须为 "&lt;result_field&gt;=&lt;value&gt;"
+                        且 &lt;value&gt; 必须命中 allowed_values 白名单。
+                    </param>
+                </params>
+                <input-protocol critical="true">
+                    <rule n="1">
+                        step-pause 输出时必须包含两行机器可读标签：
+                          [result_field=&lt;key&gt;]
+                          [allowed_values=&lt;v1&gt;|&lt;v2&gt;|...]
+                        并保证标题最后一行为 "请用 &lt;key&gt;=&lt;value&gt; 回复"。
+                    </rule>
+                    <rule n="2">
+                        用户回复必须以 &lt;key&gt;=&lt;value&gt; 作为首行；&lt;value&gt; 必须在 allowed_values 白名单内。
+                    </rule>
+                    <rule n="3">
+                        解析失败时编排器输出 "[parse-error: 期望 &lt;key&gt; ∈ &lt;allowed_values&gt;]"
+                        并重新触发同一 step-pause；将 workflow_status.parse_error_count += 1。
+                    </rule>
+                    <rule n="4">
+                        进入新的 step-pause 之前，编排器必须将 workflow_status.parse_error_count 重置为 0；
+                        解析成功也立即清零；连续 3 次解析失败后转 Human-Review，并清零计数器
+                        （字段语义见 core/workflow-status-template.yaml 中 parse_error_count，决定 D18）。
+                    </rule>
+                    <rule n="5">
+                        编排器恢复后采用"白名单受限双写"（D15）：
+                          workflow_status.user_inputs.&lt;key&gt; = &lt;value&gt;       （总写）
+                          workflow_status.&lt;key&gt; = &lt;value&gt;                  （仅当 &lt;key&gt; 在
+                                                                                core/workflow-status-template.yaml
+                                                                                顶层镜像白名单内才写）
+                        v4.1 起步顶层镜像白名单 = { non_bug_user_choice }。
+                    </rule>
+                </input-protocol>
+            </tag>
             <tag name="ask"><rule>向用户提问，必须使用封闭式/选择题形式，等待用户响应后继续</rule><params><param name="questions">需要询问用户的问题</param></params></tag>
             <tag name="try"><rules><rule>先执行 try 主流程，失败则重试最多 retry 次</rule><rule>任一次成功立即结束，禁止执行 catch</rule><rule>全部重试失败后才执行 catch</rule></rules><params><param name="retry">重试次数，默认 1</param></params></tag>
             <tag name="template-output"><rule>按模板保存产物到工作区文件</rule><params><param name="file">输出文件路径</param><param name="template">模板文件路径</param></params></tag>
         </execution>
     </supported-tags>
+
+    <workflow-result-protocol critical="true">
+        <rule>
+            current_phase_result 是 phase 执行期的运行时变量（不入 workflow-status.yaml schema，
+            决定 D1）。phase 早退（含 ABORT、RCA-LowConfidence、Curation-Failed、Non-Bug 等）
+            必须在返回编排器之前显式写入：
+              &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt;
+            编排器读取规则：在同一执行轮次内读取 current_phase_result；若未显式赋值则视作正常完成
+            （current_phase_result = OK），将本 phase 追加到 workflow_status.stepsCompleted。
+        </rule>
+        <rule>
+            phase 早退点位（v4.1 主链路）：
+              · phases/p2-spec-definition.md：Non-Bug 早退（PR-3） / Context-Curating / Curation-Failed
+              · phases/p3-root-cause.md：4 处早退点（PR-4，含 RCA-LowConfidence 等）
+              · phases/p6-verification.md：1 处失败回流早退点（PR-4）
+            上述 5+ 处必须在 PR-3/PR-4 内补齐 &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt; 标记。
+        </rule>
+        <rule>
+            禁止把 current_phase_result 写入 core/workflow-status-template.yaml；
+            禁止在 phase 文件外（如 agents/templates）引用该变量；
+            禁止在 SKILL.md / system-prompt.md / PLATFORM-GUIDE.md 的"最少持久化字段"列表中收录该字段。
+        </rule>
+    </workflow-result-protocol>
 
     <human-review-protocol critical="true">
         <rule>以下任一条件触发时，立即输出 Human-Review 通知并暂停工作流：</rule>

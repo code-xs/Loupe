@@ -1,5 +1,13 @@
 # Mobile QA Workflow 状态模板文件，禁止修改此文件格式
 # ⚠️ CRITICAL: 此文件必须保持严格 YAML 格式，LLM 禁止修改结构
+#
+# current_state 合法枚举集（C5 单一权威源，v4.1 完整集合）：
+#   Intake / Spec-Defining / Spec-Uncertain / Context-Curating / Curation-Failed
+#   / Boundary-Refined / Non-Bug / Info-Insufficient / RCA-Designing
+#   / RCA-LowConfidence / Fix-Designing / Fix-Implementing / Verifying
+#   / Human-Review / Done
+# 任何 phase / 编排器 / 文档新增的 current_state 取值，必须先在此处注册并同步
+# SKILL.md / system-prompt.md / PLATFORM-GUIDE.md（PR-7 联动）。
 
 # [PRESERVE_FORMAT]
 issue_id: null
@@ -16,10 +24,18 @@ lastStep: null
 non_bug_reflow_count: 0
 lint_retry_count: 0
 workflow_version: "abc-1"
-schema_version: 3
+schema_version: 4    # v4.1：3 → 4（v2.0 P0-3）；迁移脚本路径见 mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py
 analysis_complexity: null
 analysis_complexity_confidence: null
+
+# fanout_mode 命名约束（D7）：保留为 RCA 字段，不重命名为 rca_fanout_mode；
+# Fix 阶段一律改写 fix_fanout_mode（C10 字段隔离）。
 fanout_mode: null
+fix_fanout_mode: null    # C10 + D7：v4.1 新增，承接 P4 的 fix_strategy_mode/contested-arbitrated 等取值
+# C10 兼容性方案 B 兜底：P3 完成时 fanout_mode 的快照，用于 P3 重入时还原 RCA 上下文；
+# 与 phase_history 中元素的 fanout_mode 字段双保险（迁移脚本 §6.3 利用该值还原 fanout_mode）。
+rca_fanout_mode_snapshot: null
+
 fix_strategy_mode: null
 fix_risk_level: null
 reroute_reason: null
@@ -29,6 +45,46 @@ rca_retry_count: 0
 fix_retry_count: 0
 verification_failure_type: null
 
+# phase_history（v4.1 / v2.0 P1-2）：阶段执行历史，元素结构固定为：
+#   { phase: <str, e.g. "qa-root-cause">,
+#     timestamp: <ISO8601>,
+#     fanout_mode: <str|null, 该阶段完成时 fanout_mode 的取值>,
+#     note: <str, 可选备注> }
+# PR-4 P3 完成时按此结构 append；迁移脚本 §6.3 据此反查 fanout_mode 还原值。
+phase_history: []
+
+# user_inputs（v4.1 / C11 D2）：step-pause 用户回复的命名空间容器。
+# 编排器 step 4 解析 step-pause 用户回复后总是写入 user_inputs.<result_field>；
+# 仅当 <result_field> 在下方"顶层镜像字段白名单"内时，才同步写入顶层（D15 双写白名单受限）。
+# v4.2 收敛后编排器改读 user_inputs.<key>，届时删除下方所有顶层镜像字段。
+user_inputs: {}
+
+# Non-Bug 上下文（v4.1 / v2.2 D17）：供编排器 step 4 case Non-Bug 的 step-pause
+# 标题占位 "{non_bug_context}" 使用，承载最近一次 Non-Bug 判定说明
+# （Working-As-Designed / 复现路径不充分等）。允许在后续会话中被覆盖，非长期业务字段。
+# 写入端：phases/p2-spec-definition.md step 4 判定 Non-Bug 时（PR-3）。
+# 与 Non-Bug 三字段职责正交（v1.2 review Finding #5 收口）：
+#   · non_bug_reflow_count（v3 已有）= 跨轮回流次数（trigger #6 输入）
+#   · non_bug_user_choice  （v4.1 新增）= 当前轮 step-pause 用户选择（白名单镜像，v4.2 收敛）
+#   · non_bug_context      （v4.1 新增）= 当前轮 P2 Non-Bug 判定上下文文本（顶层 schema 字段）
+non_bug_context: null
+
+# parse-error 计数器（v4.1 / v2.2 D18）：step-pause 连续解析失败熔断计数器。
+# 生命周期（编排器 core/workflow.xml step 4 维护，PR-2 实现）：
+#   · 进入新的 step-pause 之前 → 重置 0
+#   · 解析成功 → 重置 0
+#   · 解析失败 → += 1
+#   · 累计 >= 3 → 切到 current_state = Human-Review，并重置 0
+parse_error_count: 0
+
+# ⚠️ 顶层镜像字段白名单（v4.1 双写过渡，v4.2 收敛 / D8 + D15）
+# 协议（强契约）：编排器双写时仅当 step-pause 的 result_field 出现在以下字段集中，
+#   才会同步写入顶层；不在白名单内的 result_field 仅写 user_inputs.<key>，不污染顶层 schema。
+# 起步白名单 = { non_bug_user_choice }；新增需 PR Review 显式批准并同步本块注释。
+# v4.2 收敛动作：编排器改读 user_inputs.<key>，并删除以下字段（v4.2 遗留 #3）。
+non_bug_user_choice: null    # 镜像 user_inputs.non_bug_user_choice（v4.1 起步白名单）
+
+# ── 以下保留不动：specialized_workflow + [END_PRESERVE_FORMAT] ──
 specialized_workflow:
   mode: null
   status: null

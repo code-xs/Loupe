@@ -1,0 +1,83 @@
+# Mobile QA Workflow — config_source 键名 schema（M16 最小子集 / v4.1 引入）
+# ────────────────────────────────────────────────────────────────────────────
+# 唯一职责：枚举 phases 中所有 "更新 config_source.<key>" 动作允许使用的合法键名。
+# 消费方：
+#   · core/default-config.yaml          —— 实际默认值落地，本表是其字段子集的权威白名单
+#   · functionality-deep-dive/core/default-config.yaml —— deep-dive 子配置（emit_* 与本表
+#                                                       存在键名漂移，统一映射延后 v4.2 遗留 #1）
+#   · phases/**/*.md                    —— 所有 "更新 config_source.<key>" 动作必须命中本表
+#   · .github/workflows/qa-workflow-schema-check.yml （PR-8 / D11）
+#   · mobile-qa-workflow/scripts/check-config-schema.sh （PR-8 / D13）
+# ────────────────────────────────────────────────────────────────────────────
+# 命名约定：
+#   · output_*  : 阶段产物文件路径（落盘到 qa-workspace/{issue_id}/）
+#   · env_*     : 运行环境能力开关（read-only，由 install 期决定）
+#   · active_*  : 路由策略选择（运行期可由 phase 写）
+#   · routing_* : 路由元数据
+# ────────────────────────────────────────────────────────────────────────────
+
+schema_version: 1   # config-schema 自身版本号，与 workflow-status-template 的 schema_version 解耦
+
+allowed_keys:
+  # ── 标识 / 元信息 ──────────────────────────────────────────────────────────
+  - issue_id
+  - workspace_name
+  - platform
+  - priority
+
+  # ── 主流程产物（output_*）────────────────────────────────────────────────
+  - output_issue_card
+  - output_spec
+  - output_context_bundle
+  - output_curation_report   # v4.1 新增（PR-1 同步补齐 default-config.yaml，C5 关联）
+  - output_rca_report
+  - output_fix_design
+  - output_impl_report
+  - output_contract_checklist
+  - output_error_dump
+  - output_verification_report
+  - output_knowledge_card
+
+  # ── Deep-Dive 产物（B3 联动 / 与 deep-dive 子配置 emit_* 存在键名漂移） ──
+  - output_environment_factor_report
+  - output_topology_report
+  - output_concurrency_report
+  - output_deep_dive_rca
+  - output_deep_dive_summary
+  - output_defensive_fix_design
+
+  # ── 环境能力 / 路由策略 / 运行期产物 ─────────────────────────────────────
+  - env_file_system
+  - env_git
+  - env_lint_tools
+  - env_subagent
+  - routing_policy_version
+  - active_fanout_policy
+  - active_fix_strategy_policy
+  - output_runtime_compat_report
+  - output_reroute_trace
+
+  # ── Deep-Dive 默认产物开关聚合块 ────────────────────────────────────────
+  - deep_dive_optional_artifacts
+
+  # ── 修复 / 仓库元信息 ───────────────────────────────────────────────────
+  - fix_branch
+  - repo_path
+  - repo_branch
+  - code_patch
+  - prd_link
+  - tech_design_link
+
+# 子键白名单（仅当顶层 key 是聚合块时声明）
+nested_allowed_keys:
+  deep_dive_optional_artifacts:
+    - environment_factor_report
+    - deep_dive_topology
+    - concurrency_analysis_report
+
+# 已知遗留映射（仅记录，不参与校验，统一治理延后 v4.2 遗留 #1）
+known_legacy_aliases:
+  # 主端 deep_dive_optional_artifacts.<key> ↔ 子端 emit_<key>
+  deep_dive_optional_artifacts.environment_factor_report: emit_environment_factor_report
+  deep_dive_optional_artifacts.deep_dive_topology:        emit_topology_report
+  deep_dive_optional_artifacts.concurrency_analysis_report: emit_concurrency_report

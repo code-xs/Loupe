@@ -9,6 +9,7 @@ priority: null
 output_issue_card: null
 output_spec: null
 output_context_bundle: null
+output_curation_report: null   # v4.1 新增 / C5 联动：Context-Curating 阶段产物路径
 output_rca_report: null
 output_fix_design: null
 output_impl_report: null

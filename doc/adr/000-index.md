@@ -17,7 +17,7 @@
 | [ADR-007](./007-fanout-mode-no-rename.md) | 保留 `fanout_mode` 不重命名 + 新增 `fix_fanout_mode` | active | D7 | v4.1 PR-1（已合入）+ v4.2 PR-2 修订 |
 | [ADR-008](./008-step-pause-userinputs-namespace.md) | `step-pause` 写入 `user_inputs.*` 命名空间 + 顶层镜像双写 | active | D8 | v4.1 PR-2（已合入） |
 | [ADR-009](./009-merge-order-constraint.md) | v4.1 PR 合入顺序 = PR-4 → PR-3 → PR-5 | active | D9 | v4.1 PR-1（已合入） |
-| [ADR-010](./010-step-pause-registry-data-driven.md) | step-pause registry 数据驱动 | **draft** | D10 + V1.1 O10+ Stage-1 | **v4.2 PR-5（落地依赖）** |
+| [ADR-010](./010-step-pause-registry-data-driven.md) | step-pause registry 数据驱动 | active | D10 + V1.1 O10+ Stage-1 + Stage-2 | **v4.2 PR-5（已交付，详见 ADR-010 §6 PR-5 落地纪要）** |
 | [ADR-011](./011-ci-entry-point.md) | CI 起点 = `.github/workflows/qa-workflow-schema-check.yml` | active | D11 | v4.1 PR-8（已合入） |
 | [ADR-012](./012-install-trae-shim.md) | `install_trae.sh` 改为 shim 调用 | active | D12 | v4.1 PR-7（已合入） |
 | [ADR-013](./013-migrate-script-path.md) | 迁移脚本路径锁定 `mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py` | active | D13 | v4.1 PR-1（已合入） |

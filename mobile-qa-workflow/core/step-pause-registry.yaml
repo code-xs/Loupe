@@ -1,0 +1,143 @@
+# Mobile QA Workflow · step-pause 注册表（C5 单一权威源 / v4.2 PR-5 / O10+）
+# ⚠️ CRITICAL: 编排器 core/workflow.xml step 4a / 4c 查表的唯一数据源；
+# 编排器内严格禁止硬编码 <switch case="<交互态>">（CI check-step-pause-registry.sh
+# 第 ③ 类 error 兜底；详见 ADR-010 §2 + V1.1 §3.2.10+ 末尾）。
+#
+# Schema（v4.2 PR-5 v1.1 / Patch A）：
+#   state(必填，∈enum) / kind("step-pause"|"route"，默认 "step-pause")
+# kind == "step-pause"（6 个交互态）：
+#   title_template / result_field / allowed_values / options[{title, action}]
+#   / on_success(map[str → action_block]) / mirror_to_top(可选 bool，D15 双写标记，
+#     v4.2 PR-5 起仅 Non-Bug；遗留 #3 删除后下线)。
+# kind == "route"（1 个纯路由态 Boundary-Refined）：
+#   on_route(action_block) — 编排器 4c 命中时直接执行，不发起 step-pause、不等用户回复。
+# action_block 原子动作（详见 ADR-010 §0 展开规则）：
+#   set_state(str，∈enum) / write(map，key ∈顶层字段) / increment(str，同上)
+#   / goto("step_2"|"step_4") / terminal(true) / interpret_freetext(true，仅 Human-Review)
+#   / check(str，"field <op> literal" + true/false 子块)
+
+registry:
+  - state: Info-Insufficient
+    title_template: |
+      信息不足，需要用户补充以下缺失项：
+      {missing_items}
+    result_field: info_insufficient_action
+    allowed_values: [Submit]
+    options:
+      - title: "[S] Submit：补充信息后继续，回流 qa-intake"
+        action: "info_insufficient_action=Submit"
+    on_success:
+      Submit:
+        set_state: Intake
+        goto: step_2
+
+  - state: Spec-Uncertain   # PR-3' / O13a 已统一契约为 1|2|S 三选
+    title_template: |
+      Spec 存在歧义，请确认 Expected Behavior：
+      {spec_options}
+    result_field: spec_uncertain_choice
+    allowed_values: ["1", "2", "S"]
+    options:
+      - title: "[1] {option_1}（采纳第 1 种 Expected Behavior 继续）"
+        action: "spec_uncertain_choice=1"
+      - title: "[2] {option_2}（采纳第 2 种 Expected Behavior 继续）"
+        action: "spec_uncertain_choice=2"
+      - title: "[S] Skip：先并行分析所有可能，后续确认"
+        action: "spec_uncertain_choice=S"
+    on_success:
+      "1":
+        set_state: Spec-Defining
+        write: { selected_spec_index: 1 }
+        goto: step_2
+      "2":
+        set_state: Spec-Defining
+        write: { selected_spec_index: 2 }
+        goto: step_2
+      "S":
+        set_state: Spec-Defining
+        write: { selected_spec_index: parallel }
+        goto: step_2
+
+  - state: Non-Bug
+    title_template: |
+      Non-Bug 判定结果，请确认处理方向：
+
+      {non_bug_context}
+    result_field: non_bug_user_choice
+    allowed_values: [Accept, Reflow]
+    mirror_to_top: true   # D15 双写数据化（v4.2 PR-5 起步白名单：仅本项；遗留 #3 删除后本标记一并下线）
+    options:
+      - title: "[A] Accept：接受 Non-Bug 判定，关闭 issue"
+        action: "non_bug_user_choice=Accept"
+      - title: "[R] Reflow：补充证据后重新进入 Spec-Defining 重审"
+        action: "non_bug_user_choice=Reflow"
+    on_success:
+      Accept:
+        set_state: Done
+        terminal: true
+      Reflow:
+        check: "non_bug_reflow_count < 2"
+        true:
+          set_state: Spec-Defining
+          increment: non_bug_reflow_count
+          goto: step_2
+        false:
+          set_state: Human-Review
+
+  - state: RCA-LowConfidence
+    title_template: |
+      根因分析置信度不足（< 0.5），建议处理方向：{suggestion}
+    result_field: rca_lowconf_action
+    allowed_values: [Retry, Human]
+    options:
+      - title: "[R] Retry：补充上下文后重新分析（回流 qa-spec-definition）"
+        action: "rca_lowconf_action=Retry"
+      - title: "[H] Human：转人工处理"
+        action: "rca_lowconf_action=Human"
+    on_success:
+      Retry:
+        set_state: Spec-Defining
+        goto: step_2
+      Human:
+        set_state: Human-Review
+
+  - state: Curation-Failed
+    title_template: |
+      上下文策展失败（置信度 < 0.4），请补充信息或转人工
+    result_field: curation_failed_action
+    allowed_values: [Retry, Human]
+    options:
+      - title: "[R] Retry：补充信息后重新策展（回流 qa-spec-definition）"
+        action: "curation_failed_action=Retry"
+      - title: "[H] Human：转人工处理"
+        action: "curation_failed_action=Human"
+    on_success:
+      Retry:
+        set_state: Spec-Defining
+        goto: step_2
+      Human:
+        set_state: Human-Review
+
+  - state: Human-Review
+    title_template: |
+      ⚠️ 需要人工介入，请处理后告知继续方向
+    result_field: human_review_continue
+    allowed_values: [Continue]
+    options:
+      - title: "[C] Continue：人工处理完成，继续工作流"
+        action: "human_review_continue=Continue"
+    on_success:
+      Continue:
+        interpret_freetext: true   # 编排器 4c 由 LLM 解释回复正文，更新 current_state / 计数器
+        goto: step_2
+
+  # ── REG-N1.7（v1.1 / Patch A / review Finding 1 收口）─────────────────────────
+  # Boundary-Refined 是 P3 写入的"纯路由态"（phases/p3-root-cause.md L62），
+  # v4.1 编排器在 step 4 内显式 set_state = RCA-Designing 后回 step 2。
+  # v1.0 误归默认流转会让 current_state 留在 Boundary-Refined 导致 P3 自循环；
+  # v1.1 把它纳入 registry 作为 kind: route 项，与 6 个交互态共用同一权威源。
+  - state: Boundary-Refined
+    kind: route
+    on_route:
+      set_state: RCA-Designing
+      goto: step_2

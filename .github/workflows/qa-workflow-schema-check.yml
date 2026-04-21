@@ -368,3 +368,16 @@ jobs:
         env:
           PHASE_ABORT_SEVERITY: warning  # PR-3' 起步 warning，PR-6 升级 error
         run: bash mobile-qa-workflow/scripts/check-phase-abort-structure.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 16（v4.2 PR-5 启用 error）：step-pause-registry 守门 / V1.1 §3.2.22 / O22 / SCRIPT-N1
+      # 三类校验（v1.1 修订 / Patch C 双向严格相等 + Patch A Boundary-Refined 路由项）：
+      #   ① state 合法性（registry 每个 state ∈ workflow-status-template.yaml enum 集）
+      #   ② step 4a/4b/4c 拆分检测 + 双向严格相等
+      #      （EXPECTED = 6 交互态 + Boundary-Refined；分类报 missing / unexpected）
+      #   ③ step 4a/4b/4c 区间内零硬编码 case（H3 强约束 / 黑名单含 Boundary-Refined + Fix-Confirming）
+      # 严重度：error 起步（无 warning 过渡 / ADR-010 §6.4 / 主控 §4 / 阻塞合入）
+      # 关联：ADR-010 active + V1.1 §3.2.10+ Stage-1+Stage-2 + Registry 权威性约束
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 16 — step-pause-registry 守门 (v4.2 PR-5 / O10+ / O22 / H3)
+        run: bash mobile-qa-workflow/scripts/check-step-pause-registry.sh

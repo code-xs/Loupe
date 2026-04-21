@@ -34,5 +34,27 @@
 
 - v2.2 主文档 §6 D16 拍板纪要
 - ADR-002（input-protocol 子标签）
-- ADR-010（step-pause-registry 草稿）
+- ADR-010（step-pause-registry 草稿 → v4.2 PR-5 active）
 - ADR-018（parse-error 4 类生命周期）
+
+---
+
+## v4.2 修订段（PR-5 落地 / 2026-04-21 / 关联 ADR-010 active 化）
+
+**变化背景**：PR-5（O10+ Stage-2）把 `core/workflow.xml` step 4 内 6 个交互态 case
+统一改写为 `<step-pause registry-key="${current_state}"/>`，新写法不再携带
+`title` / `result_field` / `allowed_values`，而是由编排器 4c 在 LLM 展开前注入
+`registry-key`，LLM 按 ADR-010 §0 展开规则查 `core/step-pause-registry.yaml` 渲染
+等价 `inline` 形态后，再按 ADR-016 主体的 5 步咒语输出强结构。
+
+**两形态契约（与 `core/core-rules.xml` `<tag name="step-pause"><forms>` 块字面同源）**：
+
+| 形态 | 必填参数 | 禁出参数 | 适用范围 |
+|---|---|---|---|
+| `inline` | `title` + `result_field` + `allowed_values` | `registry-key` | phase 文件残留（PR-6 删除前过渡） |
+| `registry` | `registry-key` | `title` + `result_field` + `allowed_values` + `option` | 编排器 4c（v4.2 PR-5 起唯一新写法） |
+
+**强约束**：① 任何 `<step-pause>` 必须命中且仅命中其中之一；② mutex 违规
+（同时含或同时缺）由 `scripts/check-io-contract.sh` 互斥校验段（CI-D1）兜底
+为 error；③ `inline` 形态的 5 步咒语 / 输入契约（`[result_field=...]` 强结构）
+完全延续 ADR-016 主体；`registry` 形态展开后等价 `inline`，输出契约相同。

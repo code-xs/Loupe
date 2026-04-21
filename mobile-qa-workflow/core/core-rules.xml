@@ -122,25 +122,52 @@
                         例外清单见 mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
                         （v4.2 遗留 #6 治理目标，PR-5 维护、PR-8 CI 消费）。
                     </rule>
+                    <rule>v4.2 PR-5 起 &lt;step-pause&gt; 必须命中且仅命中以下两种互斥形态之一
+                          （由 scripts/check-io-contract.sh 互斥校验段强制 / 详见 ADR-016 v4.2 修订段）。</rule>
                 </rules>
+                <forms>
+                    <!-- Inline 形态（v4.1 老写法 / PR-6 删除 phase 内联前过渡保留 / 仅 phase 文件残留例外） -->
+                    <form name="inline">
+                        <required>title, result_field, allowed_values</required>
+                        <optional cardinality="0..*">option</optional>
+                        <forbidden>registry-key</forbidden>
+                        <expand>LLM 按 input-protocol rule n=1 输出强结构 [result_field=...][allowed_values=...]
+                                并附 "请用 &lt;key&gt;=&lt;value&gt; 回复" 末尾行；编排器 4a 按 result_field 解析。</expand>
+                    </form>
+                    <!-- Registry 形态（v4.2 PR-5 起 / 编排器 4c 唯一形态） -->
+                    <form name="registry">
+                        <required>registry-key</required>
+                        <forbidden>title, result_field, allowed_values, option</forbidden>
+                        <expand>LLM 按 ADR-010 §0 展开规则查 core/step-pause-registry.yaml，
+                                把 registry-key 命中项的 title_template / result_field / allowed_values / options
+                                渲染为等价 inline 形态再按 input-protocol rule n=1 输出。</expand>
+                    </form>
+                    <mutex critical="true">两 form 必须命中且仅命中其中之一；同时含 registry-key 与 title
+                                          / 同时缺两组关键字段，均判定为协议违规（check-io-contract.sh 互斥校验段 error）。</mutex>
+                </forms>
                 <params>
-                    <param name="title" required="true">
-                        停顿标题（必填）。最后一行必须追加 "请用 &lt;key&gt;=&lt;value&gt; 回复"，
+                    <param name="title" required="form:inline">
+                        停顿标题（form=inline 必填）。最后一行必须追加 "请用 &lt;key&gt;=&lt;value&gt; 回复"，
                         其中 &lt;key&gt; 必须与 result_field 同名，&lt;value&gt; 必须落在 allowed_values 内。
                     </param>
-                    <param name="result_field" required="true">
-                        本停顿点用户回复写入的字段名（必填）。在 core/workflow-status-template.yaml
+                    <param name="result_field" required="form:inline">
+                        本停顿点用户回复写入的字段名（form=inline 必填）。在 core/workflow-status-template.yaml
                         的顶层镜像白名单内时由编排器双写到 workflow_status.&lt;result_field&gt;；
                         总是写入 workflow_status.user_inputs.&lt;result_field&gt;。
                     </param>
-                    <param name="allowed_values" required="true">
-                        合法回复值白名单（必填，使用 "|" 分隔）。例如 "Accept|Reflow"。
+                    <param name="allowed_values" required="form:inline">
+                        合法回复值白名单（form=inline 必填，使用 "|" 分隔）。例如 "Accept|Reflow"。
                         编排器解析失败时回显该白名单。
                     </param>
                     <param name="option" required="false" cardinality="0..*">
-                        停顿选项（可选，0..*）。每个 &lt;option&gt; 标注一行可选回复语义，
+                        停顿选项（form=inline 可选，0..*）。每个 &lt;option&gt; 标注一行可选回复语义，
                         其 action 属性形式必须为 "&lt;result_field&gt;=&lt;value&gt;"
                         且 &lt;value&gt; 必须命中 allowed_values 白名单。
+                    </param>
+                    <param name="registry-key" required="form:registry">
+                        v4.2 PR-5 起新增。值通常为 "${current_state}"，由编排器 4c 在 LLM 展开前注入；
+                        LLM 按 ADR-010 §0 展开规则查 core/step-pause-registry.yaml 渲染等价 inline 形态。
+                        禁止与 title / result_field / allowed_values / option 共存（mutex critical）。
                     </param>
                 </params>
                 <input-protocol critical="true">

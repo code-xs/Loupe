@@ -26,8 +26,7 @@ description: >-
 | 字段 | 默认 | 用途 | 引入版本 |
 |---|---|---|---|
 | `schema_version` | `4` | v4.1 schema 升级；旧会话由迁移脚本补齐 | v4.1（v3 → v4） |
-| `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离，承接 `single-proposer` / `challenged-proposer` / `contested-arbitrated`），与 RCA 字段 `fanout_mode` 物理隔离 | v4.1 |
-| `rca_fanout_mode_snapshot` | `null` | P3 完成时 `fanout_mode` 的快照，用于 P3 重入时还原 RCA 上下文（C10 兼容性方案 B 兜底） | v4.1 |
+| `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离，承接 `single-proposer` / `challenged-proposer` / `contested-arbitrated`），与 RCA 字段 `fanout_mode` 物理隔离 | v4.1 / v4.2 PR-2 收敛 `fix_strategy_mode` |
 | `phase_history` | `[]` | 阶段执行历史，元素结构：`{phase, timestamp, fanout_mode, note?}`；P3 完成时 append（C10 兼容性方案 A 主路径） | v4.1 |
 | `user_inputs` | `{}` | step-pause 用户回复命名空间容器；编排器 step 4 解析回复后**总是**写入 `user_inputs.<result_field>` | v4.1 |
 | `non_bug_context` | `null` | 最近一次 P2 Non-Bug 判定上下文文本，供编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用；允许在后续会话中被覆盖，非长期业务字段 | v4.1（D17） |

@@ -314,21 +314,21 @@ jobs:
         run: bash mobile-qa-workflow/scripts/check-state-enum.sh
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 10（v4.2 PR-1 启用 warning，PR-2 升级 error）：system-prompt sync 守门
-      #   v1.1 算法 = 声明块对声明块 + 高风险 token 白名单
+      # 检查 10（v4.2 PR-2 升级 error）：system-prompt sync 守门
+      #   前置：SCRIPT-FIX1 修复提取器 + ANCHOR-N1/N2 锚点已加 + 实跑零 warning
+      #   v4.2 PR-2 / CI-U1b：删除 SP_SYNC_SEVERITY=warning，默认即 error
       # ════════════════════════════════════════════════════════════════
-      - name: "Check 10 — system-prompt sync 守门（PR-1: warning）"
-        env:
-          SP_SYNC_SEVERITY: warning
+      - name: Check 10 — system-prompt sync 守门
         run: bash mobile-qa-workflow/scripts/check-system-prompt-sync.sh
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 11（v4.2 PR-1 启用 warning，PR-2 评估升级 error）：io-contract 守门
-      #   v1.1 算法 = basename 匹配 + 变量化路径兜底
+      # 检查 11（v4.2 PR-2 维持 warning）：io-contract 守门
+      # v1.1 review Major 1 修订：当前脚本变量化兜底过宽，假绿守门价值不足，
+      # 推迟到后续算法增强 PR；本 PR 不动 severity，保持 PR-1 v1.1 配置。
       # ════════════════════════════════════════════════════════════════
-      - name: "Check 11 — io-contract 守门（PR-1: warning）"
+      - name: Check 11 — io-contract 守门
         env:
-          IO_CONTRACT_SEVERITY: warning
+          IO_CONTRACT_SEVERITY: warning  # v4.2 PR-2 不升级；待后续 PR 算法增强后再改 error
         run: bash mobile-qa-workflow/scripts/check-io-contract.sh
 
       # ════════════════════════════════════════════════════════════════
@@ -336,3 +336,21 @@ jobs:
       # ════════════════════════════════════════════════════════════════
       - name: Check 12 — subagent-params 守门
         run: bash mobile-qa-workflow/scripts/check-subagent-params.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 13（v4.2 PR-2 启用 error）：build-system-prompt precondition 守门 / V1.1 §4.1.0 H1
+      # 实现：锚点提取式（ANCHOR-N1/N2 联动），缺锚点直接 error
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 13 — build-system-prompt precondition 守门
+        run: bash mobile-qa-workflow/scripts/check-build-system-prompt-precondition.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 14（v4.2 PR-2 启用）：build-system-prompt 单测 + P3 反查回放用例
+      # 同时跑 GEN-N2（生成器单测）+ TEST-N1（READ-N1 反查算法等价回放）
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 14 — build-system-prompt + p3-reentry replay tests
+        run: |
+          if [ -f mobile-qa-workflow/scripts/requirements.txt ]; then
+            pip install -r mobile-qa-workflow/scripts/requirements.txt
+          fi
+          python -m unittest discover -s mobile-qa-workflow/scripts/tests/ -v

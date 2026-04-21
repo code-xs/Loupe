@@ -14,7 +14,7 @@
 | [ADR-004](./004-audit-scope-double-layer.md) | 审计范围口径双层化 | active | D4 | v1.2.1 报告（已合入） |
 | [ADR-005](./005-pr-tier-tagging.md) | PR 层级标签（🟢 / 🟡 / 🔴） | active | D5 | v4.1 PR-1（已合入） |
 | [ADR-006](./006-deep-dive-keyname-deferral.md) | Deep-Dive 键名映射延后 | active | D6 | v4.1 不动，v4.3 评估 |
-| [ADR-007](./007-fanout-mode-no-rename.md) | 保留 `fanout_mode` 不重命名 + 新增 `fix_fanout_mode` | active | D7 | v4.1 PR-1（已合入） |
+| [ADR-007](./007-fanout-mode-no-rename.md) | 保留 `fanout_mode` 不重命名 + 新增 `fix_fanout_mode` | active | D7 | v4.1 PR-1（已合入）+ v4.2 PR-2 修订 |
 | [ADR-008](./008-step-pause-userinputs-namespace.md) | `step-pause` 写入 `user_inputs.*` 命名空间 + 顶层镜像双写 | active | D8 | v4.1 PR-2（已合入） |
 | [ADR-009](./009-merge-order-constraint.md) | v4.1 PR 合入顺序 = PR-4 → PR-3 → PR-5 | active | D9 | v4.1 PR-1（已合入） |
 | [ADR-010](./010-step-pause-registry-data-driven.md) | step-pause registry 数据驱动 | **draft** | D10 + V1.1 O10+ Stage-1 | **v4.2 PR-5（落地依赖）** |

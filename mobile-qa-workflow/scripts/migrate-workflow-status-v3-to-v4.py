@@ -8,26 +8,29 @@ Requires:
   · ruamel.yaml >= 0.17     # pip install -r mobile-qa-workflow/scripts/requirements.txt
                             # 或: pip install 'ruamel.yaml>=0.17'
 
-迁移动作（与 core/workflow-status-template.yaml v4.1 schema 一一对应）:
+迁移动作（与 core/workflow-status-template.yaml v4.1 / v4.2 PR-2 schema 一一对应）:
   · schema_version: 3 -> 4
-  · 注入 7 个新顶层字段（缺失即注入默认值，存在即保留原值，幂等）:
+  · 注入 6 个新顶层字段（缺失即注入默认值，存在即保留原值，幂等）:
       - fix_fanout_mode: None
-      - rca_fanout_mode_snapshot: None
       - phase_history: []
       - user_inputs: {}
       - non_bug_context: None
       - parse_error_count: 0
       - non_bug_user_choice: None        # 顶层镜像白名单（v4.1 起步集，v4.2 收敛删除）
+  · v4.2 PR-2 修订（O7 / ADR-007 v4.2 修订段落）：已废弃字段不再注入：
+      - rca_fanout_mode_snapshot（删除：方案 A phase_history 反查已是主路径）
+      - fix_strategy_mode（合并到 fix_fanout_mode）
+    存量 v4 会话使用 `--cleanup-v4-deprecated` 子命令幂等清理。
 
 不做的事:
   · 不重命名任何 v3 已有字段（D7：fanout_mode 保持不变）
   · 不修改 specialized_workflow 嵌套块（PRESERVE_FORMAT 区域）
   · 不写入 current_phase_result（D1：运行时变量，不入 schema）
-  · 不实施 fanout_mode 反查还原逻辑（主文档 §6.3 描述的 phase_history 反查由 PR-4 写入完成后增强）
   · 不支持 v4 → v3 反向迁移
 
 用法:
   python migrate-workflow-status-v3-to-v4.py <path-to-workflow-status.yaml> [--dry-run] [--no-strict]
+  python migrate-workflow-status-v3-to-v4.py <path-to-workflow-status.yaml> --cleanup-v4-deprecated [--dry-run]
 """
 from __future__ import annotations
 
@@ -48,12 +51,18 @@ except ImportError:
 
 NEW_FIELDS_DEFAULTS: list[tuple[str, object]] = [
     ("fix_fanout_mode", None),
-    ("rca_fanout_mode_snapshot", None),
     ("phase_history", CommentedSeq()),
     ("user_inputs", CommentedMap()),
     ("non_bug_context", None),
     ("parse_error_count", 0),
     ("non_bug_user_choice", None),
+]
+# v4.2 PR-2 修订（O7 / O8 / ADR-007 v4.2 修订段落）：
+# 已废弃字段不再注入：rca_fanout_mode_snapshot（删除）/ fix_strategy_mode（合并到 fix_fanout_mode）。
+# 存量会话清理：使用 `--cleanup-v4-deprecated` 子命令幂等处理。
+DEPRECATED_FIELDS_V4_2: list[str] = [
+    "rca_fanout_mode_snapshot",
+    "fix_strategy_mode",
 ]
 
 # 新字段的锚点：必须插入到该字段之前，确保新字段全部落入
@@ -129,11 +138,57 @@ def migrate(doc: CommentedMap, *, strict: bool = True) -> tuple[bool, list[str]]
     return True, log
 
 
+def cleanup_v4_deprecated(doc: CommentedMap) -> tuple[bool, list[str]]:
+    """v4 内部清理（v4.2 PR-2 / O7 + O8）：
+
+    幂等地把存量会话的 fix_strategy_mode 拷贝到 fix_fanout_mode（仅当后者缺失/空），
+    再删除 rca_fanout_mode_snapshot 与 fix_strategy_mode 两个已废弃字段。
+
+    返回 (是否变更, 动作日志)。
+    """
+    log: list[str] = []
+    changed = False
+
+    if "fix_strategy_mode" in doc and doc.get("fix_strategy_mode") is not None:
+        if not doc.get("fix_fanout_mode"):
+            doc["fix_fanout_mode"] = doc["fix_strategy_mode"]
+            log.append(
+                f"copy: fix_strategy_mode -> fix_fanout_mode "
+                f"(value={doc['fix_strategy_mode']!r}; previous fix_fanout_mode was empty)"
+            )
+            changed = True
+        else:
+            log.append(
+                f"skip-copy: fix_fanout_mode already set "
+                f"(={doc['fix_fanout_mode']!r}); leaving fix_strategy_mode alone for delete"
+            )
+
+    for field in DEPRECATED_FIELDS_V4_2:
+        if field in doc:
+            del doc[field]
+            log.append(f"remove: {field} (v4.2 PR-2 deprecated)")
+            changed = True
+        else:
+            log.append(f"noop: {field} not present (idempotent)")
+
+    if not changed:
+        log.append("noop: no v4.2 deprecated fields to clean (idempotent)")
+    return changed, log
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Migrate workflow-status.yaml v3 -> v4")
     parser.add_argument("path", type=Path, help="path to workflow-status.yaml")
     parser.add_argument("--dry-run", action="store_true", help="print planned changes without writing")
     parser.add_argument("--no-strict", action="store_true", help="allow unknown schema_version (force migrate)")
+    parser.add_argument(
+        "--cleanup-v4-deprecated",
+        action="store_true",
+        help=(
+            "对存量 v4 会话做 v4.2 PR-2 字段清理（拷值 fix_strategy_mode -> fix_fanout_mode + "
+            "删除 rca_fanout_mode_snapshot / fix_strategy_mode），与主路径迁移互斥"
+        ),
+    )
     args = parser.parse_args()
 
     if not args.path.is_file():
@@ -144,6 +199,24 @@ def main() -> int:
 
     with args.path.open("r", encoding="utf-8") as f:
         doc = yaml.load(f)
+
+    if args.cleanup_v4_deprecated:
+        try:
+            changed, log = cleanup_v4_deprecated(doc)
+        except ValueError as e:
+            sys.stderr.write(f"error: {e}\n")
+            return 1
+        for line in log:
+            print(f"[cleanup-v4-deprecated] {line}")
+        if not changed:
+            return 0
+        if args.dry_run:
+            print("[cleanup-v4-deprecated] --dry-run: no file written")
+            return 0
+        with args.path.open("w", encoding="utf-8") as f:
+            yaml.dump(doc, f)
+        print(f"[cleanup-v4-deprecated] wrote: {args.path}")
+        return 0
 
     try:
         changed, log = migrate(doc, strict=not args.no_strict)

@@ -25,9 +25,9 @@
                 <check if="{workflow_status} 文件不存在">
                     <load target="mobile-qa-workflow/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
                 </check>
-                <action>读取 {workflow_status} 文件，获取 stepsCompleted、current_state、workflow_version、schema_version、analysis_complexity、fanout_mode、fix_strategy_mode、reroute_target_phase、rca_retry_count、fix_retry_count</action>
+                <action>读取 {workflow_status} 文件，获取 stepsCompleted、current_state、workflow_version、schema_version、analysis_complexity、fanout_mode、fix_fanout_mode、reroute_target_phase、rca_retry_count、fix_retry_count、phase_history</action>
                 <check if="workflow_version 为空">
-                    <action>将当前状态视为旧版状态文件，补充兼容默认值：workflow_version = legacy, schema_version = 1, fanout_mode = null, fix_strategy_mode = null, reroute_reason = null, reroute_target_phase = null, rca_retry_count = 0, fix_retry_count = 0</action>
+                    <action>将当前状态视为旧版状态文件，补充兼容默认值：workflow_version = legacy, schema_version = 1, fanout_mode = null, fix_fanout_mode = null, reroute_reason = null, reroute_target_phase = null, rca_retry_count = 0, fix_retry_count = 0</action>
                 </check>
                 <check if="reroute_target_phase == qa-root-cause">
                     <action>优先处理结构化重路由：将 {current_phase} 强制设为 qa-root-cause，并清空 reroute_target_phase。</action>
@@ -181,6 +181,7 @@
                             </case>
                         </switch>
                     </case>
+                    <!-- ANCHOR: spec-uncertain-allowed-values -->
                     <case if="Spec-Uncertain">
                         <action>更新 {workflow_status}：parse_error_count = 0</action>
 

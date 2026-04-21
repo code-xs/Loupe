@@ -45,7 +45,6 @@
             </action>
             <action>更新 {workflow_status}：
                 - fix_risk_level = {fix_risk_level}
-                - fix_strategy_mode = {fix_strategy_mode}
                 - fix_fanout_mode = {fix_strategy_mode}
                 - reroute_reason = null
             </action>
@@ -87,7 +86,7 @@
                     <action>顺序模拟 Fix-Proposer + Challenger，保留四重攻击结果。</action>
                 </check>
                 <check if="challenger 出现 Critical">
-                    <action>更新 {workflow_status}：fix_strategy_mode = contested-arbitrated, fix_fanout_mode = contested-arbitrated, reroute_reason = challenged_fix_escalated</action>
+                    <action>更新 {workflow_status}：fix_fanout_mode = contested-arbitrated, reroute_reason = challenged_fix_escalated</action>
                     <action>goto step="3"</action>
                 </check>
             </check>

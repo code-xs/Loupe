@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SEVERITY="${SP_SYNC_SEVERITY:-warning}"
+SEVERITY="${SP_SYNC_SEVERITY:-error}"  # v4.2 PR-2 / CI-U1b：升级默认 warning → error（前置：SCRIPT-FIX1 + ANCHOR-N1/N2 实跑零 warning）
 fail=0
 
 # ──────────────────────────────────────────────────────────
@@ -15,8 +15,25 @@ fail=0
 # 提取 system-prompt.md 中 <!-- ENUM-DECLARATION-BLOCK --> ... <!-- /ENUM-DECLARATION-BLOCK -->
 # 内的状态名集合，与 core/workflow-status-template.yaml 头部 enum 集做集合相等比对
 # ──────────────────────────────────────────────────────────
-ENUM_CORE=$(awk '/v4.1 完整集合/,/^[^#]/' core/workflow-status-template.yaml \
-  | grep -oE '[A-Z][A-Za-z-]+' | sort -u)
+# v4.2 PR-2 / SCRIPT-FIX1 改动 1：改用 python 严格抽取 v4.1 完整集合 enum 列表行
+# （仅识别 "#   X / Y / Z" 形式；剔除 awk 范围式 + 宽松 PascalCase 抓取的 PRESERVE/FORMAT/SKILL/PLATFORM-GUIDE/PR- 等噪音）
+ENUM_CORE=$(python3 - <<'PYEOF'
+import re
+content = open('core/workflow-status-template.yaml').read()
+m = re.search(r'v4\.1\s*完整集合[^\n]*\n((?:#\s+\S.*\n)+)', content)
+if not m:
+    print('__MISSING__')
+    raise SystemExit(0)
+states = []
+for line in m.group(1).splitlines():
+    body = re.sub(r'^#\s+', '', line)
+    if '/' not in body:
+        continue
+    states += [s.strip() for s in body.split('/')]
+states = sorted({s for s in states if re.fullmatch(r'[A-Z][A-Za-z-]+', s)})
+for s in states: print(s)
+PYEOF
+)
 
 ENUM_SP=$(python3 - <<'PYEOF'
 import re, sys
@@ -50,13 +67,36 @@ fi
 #     PR-1 阶段不强校验取值，但要求 system-prompt.md 与 core/workflow.xml 出现的取值"字面一致"
 # 2b) 关键 stop_state：Non-Bug / RCA-LowConfidence / Curation-Failed / Human-Review 必须在 system-prompt.md 中至少出现 1 次（基本完整性）
 # ──────────────────────────────────────────────────────────
-# 2a)
-SU_CORE=$(grep -oE 'allowed_values=[^"]*' core/workflow.xml | head -1 || echo "")
-SU_SP=$(grep -oE 'allowed_values=[^"]*' system-prompt.md | head -1 || echo "")
-if [ -n "$SU_CORE" ] && [ -n "$SU_SP" ] && [ "$SU_CORE" != "$SU_SP" ]; then
-  echo "::${SEVERITY}::Spec-Uncertain allowed_values 字面不一致 (core: $SU_CORE / sp: $SU_SP)"
+# 2a) v4.2 PR-2 / SCRIPT-FIX1 改动 2：依赖 ANCHOR-N1/N2 稳定锚点定位（窗口式扫描）
+# 实现要点（与 check-build-system-prompt-precondition.sh 的 extract_after_anchor 对称）：
+#   · 缺锚点直接 fail（severity 决定 warning/error）
+#   · 锚点后窗口 25 行（覆盖 core/workflow.xml 的 step-pause 多行块；sp 段单行已足够）
+#   · regex 仅识别 ASCII enum 字符 [A-Za-z0-9|]，避免吞掉 sp 段后面的 `）→` 全角字符
+ANCHOR_LINE='<!-- ANCHOR: spec-uncertain-allowed-values -->'
+extract_after_anchor() {
+  local file="$1" window="${2:-25}"
+  if ! grep -qF "$ANCHOR_LINE" "$file"; then
+    echo "__MISSING_ANCHOR__"
+    return
+  fi
+  awk -v anchor="$ANCHOR_LINE" -v win="$window" '
+    index($0, anchor) {hit=NR; next}
+    hit && NR-hit <= win {print}
+  ' "$file" | grep -oE 'allowed_values="?[A-Za-z0-9|]+"?' | head -1 \
+    | sed -e 's/^allowed_values=//' -e 's/^"//' -e 's/"$//'
+}
+SU_CORE=$(extract_after_anchor core/workflow.xml)
+SU_SP=$(extract_after_anchor system-prompt.md)
+if [ "$SU_CORE" = "__MISSING_ANCHOR__" ] || [ "$SU_SP" = "__MISSING_ANCHOR__" ]; then
+  echo "::${SEVERITY}::Spec-Uncertain ANCHOR 缺失（core: '$SU_CORE' / sp: '$SU_SP'）— 见 ANCHOR-N1/N2"
+  [ "$SEVERITY" = "error" ] && fail=1
+elif [ -z "$SU_CORE" ] || [ -z "$SU_SP" ]; then
+  echo "::${SEVERITY}::Spec-Uncertain 锚点窗口内未提取到 allowed_values（core: '$SU_CORE' / sp: '$SU_SP'）"
   [ "$SEVERITY" = "error" ] && fail=1
 fi
+# 注：core 与 sp 的 allowed_values 在 PR-2 阶段允许不同（core=Confirm / sp=1|2|S）；
+# 字面一致性的强约束由 check-build-system-prompt-precondition.sh（H1 守门）单独承担。
+# 本脚本只校验"两侧锚点窗口都能提取到 allowed_values"，不再做字面相等判定。
 
 # 2b)
 for state in "Non-Bug" "RCA-LowConfidence" "Curation-Failed" "Human-Review"; do

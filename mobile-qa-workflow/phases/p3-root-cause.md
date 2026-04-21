@@ -51,6 +51,13 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
     </step>
 
     <step n="4" goal="边界驱动路由与复杂度读取">
+        <!-- v4.2 PR-2 / O7 方案 B（READ-N1 / ADR-007 v4.2 修订段落）：
+             P3 重入读端补齐 — 删除 rca_fanout_mode_snapshot 后，从 phase_history 反查还原。
+             触发条件：fanout_mode 缺失或 null，且 phase_history 非空。
+             首次进入 P3（phase_history 为空）时本逻辑跳过，由下方 spec 推断路径正常工作。 -->
+        <check if="{workflow_status}.fanout_mode == null 且 {workflow_status}.phase_history 非空">
+            <action>从 {workflow_status}.phase_history 末尾反向遍历，找到第一条 phase == "qa-root-cause" 的元素，取其 fanout_mode 字段写回 {workflow_status}.fanout_mode；若反向遍历完仍未命中（极端 case：phase_history 不含 qa-root-cause 元素），则保持 fanout_mode = null，由下方 spec 推断路径接管。</action>
+        </check>
         <action>读取 {issue_card} 中的 Issue_Boundary_Level，选择边界策略：EXACT_MR -> Strategy-DiffFocus；VERSION_RANGE -> Strategy-CommitDenoise；HISTORICAL_UNCLEAR -> Strategy-DynamicBottomUp。</action>
         <action>优先读取 {spec_file} 中 Analysis Complexity / Complexity Confidence / Suggested Fan-out Mode；若缺失则按分类、优先级、模块数、状态/并发特征回退推断。</action>
         <action>将最终判定写回 {workflow_status}：analysis_complexity、analysis_complexity_confidence、fanout_mode。</action>
@@ -219,12 +226,10 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
         <action>更新 {config_source}：output_rca_report = {output_file}</action>
 
-        <!-- C10 + D7：兼容性方案 A（顺序历史）+ 方案 B（单点快照）双保险；
-             无论本次 P3 是成功完成（最终置信度 >= 0.5）还是低置信 stop，
-             都需要记录 P3 完成时的 fanout_mode 取值，供 P3 重入时或迁移脚本反查使用。
-             写入顺序：先快照、后历史 append，均在下方 stop 路径强制重写之前执行，
-             确保记录的是"P3 本次完成时 fanout_mode 的自然取值"。 -->
-        <action>更新 {workflow_status}：rca_fanout_mode_snapshot = {fanout_mode}</action>
+        <!-- ADR-007 (v4.2 PR-2 修订)：方案 A (phase_history 顺序历史) 是主路径；
+             snapshot 字段已删除（O7），P3 重入时由 phase_history 反查最近一条
+             qa-root-cause 元素的 fanout_mode；写入顺序：phase_history.append 在下方
+             stop 路径强制重写之前执行，确保记录的是"P3 本次完成时 fanout_mode 的自然取值"。 -->
         <action>更新 {workflow_status}.phase_history：append { phase: "qa-root-cause", timestamp: &lt;now ISO8601&gt;, fanout_mode: {fanout_mode}, note: null }</action>
 
         <check if="最终置信度 >= 0.5">

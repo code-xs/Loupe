@@ -155,7 +155,6 @@ Verifying → implementation_mismatch    → Fix-Designing
 |---|---|---|---|
 | `schema_version` | `4` | v4.1 schema 升级 | v3 → 4，迁移脚本兜底 |
 | `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离） | 与 RCA 字段 `fanout_mode` 物理隔离 |
-| `rca_fanout_mode_snapshot` | `null` | P3 完成时 `fanout_mode` 的快照 | C10 兼容性方案 B 兜底 |
 | `phase_history` | `[]` | 阶段执行历史 | 元素结构 `{phase, timestamp, fanout_mode, note?}`；P3 完成时 append |
 | `user_inputs` | `{}` | step-pause 用户回复命名空间容器 | 编排器 step 4 解析回复后**总是**写入 `user_inputs.<result_field>` |
 | `non_bug_context` | `null` | 最近一次 P2 Non-Bug 判定上下文文本 | 供编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用；非长期业务字段，允许覆盖 |
@@ -193,6 +192,7 @@ Verifying → implementation_mismatch    → Fix-Designing
              D14：phase 文件禁止内联 step-pause；本步骤是全部 step-pause 的唯一调度入口。 -->
         <switch condition="current_state">
             <case if="Info-Insufficient">step-pause 请求补充信息（result_field=info_insufficient_action, allowed_values=Submit）→ 补充后 goto step 2</case>
+<!-- ANCHOR: spec-uncertain-allowed-values -->
             <case if="Spec-Uncertain">step-pause 确认 Spec（result_field=spec_uncertain_choice, allowed_values=1|2|S）→ 确认后 goto step 2</case>
             <case if="Non-Bug">step-pause 标题渲染 `{non_bug_context}` 占位（result_field=non_bug_user_choice, allowed_values=Accept|Reflow）→ Accept → current_state = Done | Reflow（`non_bug_reflow_count` ≤ 2）→ goto step 2 重新评估 | Reflow（`non_bug_reflow_count` > 2）→ Human-Review</case>
             <case if="RCA-LowConfidence">step-pause 选择重试或转人工（result_field=rca_lowconf_action, allowed_values=Retry|Human）→ goto step 2</case>
@@ -355,7 +355,7 @@ Verifying → implementation_mismatch    → Fix-Designing
         <action>输出 `fix_risk_level = low | medium | high` 与 `fix_strategy_mode = single-proposer | challenged-proposer | contested-arbitrated`。</action>
         <action>`single-proposer`：高置信度 + 单点改动 + 低风险；`challenged-proposer`：中置信度或中风险；`contested-arbitrated`：多方案竞争 / 高风险 / P6 回流。</action>
         <action>共享 challenger 调用时显式注入：scene = FIX, dimension_set = fix-4a；共享 arbiter 调用时显式注入：scene = FIX。</action>
-        <action>将 `fix_strategy_mode`、`fix_risk_level`、必要的 `reroute_reason` 回写到 workflow-status。</action>
+        <action>将 `fix_fanout_mode`、`fix_risk_level`、必要的 `reroute_reason` 回写到 workflow-status。</action>
     </step>
     <step n="3" goal="四重论证与方案收敛">
         <action>四重论证：Completeness | Safety | Correctness | Minimality。</action>

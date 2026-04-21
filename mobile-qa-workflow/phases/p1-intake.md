@@ -14,19 +14,6 @@ description: Phase 1 — 问题受理与分类，将用户非结构化问题描�
 - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
 ```xml
-<!--
-========================================================================
-幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
-
-1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
-   每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
-2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
-3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
-   单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
-4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
-   自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
-========================================================================
--->
 <workflow>
     <step n="1" goal="加载流程规范">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范，并严格遵守"/>
@@ -114,9 +101,15 @@ description: Phase 1 — 问题受理与分类，将用户非结构化问题描�
         <action>输出时须覆盖 issue-card 模板：「受理提交物」中注明系统判定场景（interactive / document）；「代码与文档上下文」完整；交互式可将多轮问答摘要写入「关键信息摘要」</action>
         <action>将 Issue_Boundary_Level, Boundary_Confidence, Boundary_Alternative, Runtime_Anchor_Availability 写入 Issue Card 的元数据区块</action>
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/issue-card.md"/>
-        <action>更新 {config_source}：output_issue_card = {output_file}，platform、priority 字段</action>
-        <action>更新 {workflow_status}：Issue_Boundary_Level = {Issue_Boundary_Level}，Boundary_Confidence = {Boundary_Confidence}，Runtime_Anchor_Availability = {Runtime_Anchor_Availability}</action>
-        <action>更新 {workflow_status}：current_state = Spec-Defining</action>
+
+        <!-- v4.2 PR-3' / O21 / ADR-021：把"phase 元字段写回 + current_state 写入 + config 注册"3 个 action 合并为宏 -->
+        <phase-complete state="Spec-Defining"
+                        fields='{"Issue_Boundary_Level": "{Issue_Boundary_Level}",
+                                 "Boundary_Confidence": "{Boundary_Confidence}",
+                                 "Runtime_Anchor_Availability": "{Runtime_Anchor_Availability}"}'
+                        update_config='{"output_issue_card": "{output_file}",
+                                        "platform": "{platform}",
+                                        "priority": "{priority}"}'/>
     </step>
 </workflow>
 ```

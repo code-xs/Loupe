@@ -14,19 +14,6 @@
     - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
     ```xml
-    <!--
-    ========================================================================
-    幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
-
-    1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
-       每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
-    2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
-    3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
-       单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
-    4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
-       自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
-    ========================================================================
-    -->
     <workflow>
         <step n="1" goal="加载流程规范和上游产物">
             <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范，并严格遵守"/>
@@ -91,24 +78,19 @@
                  Spec-Uncertain <step-pause> 作为 v4.2 遗留 #6 保持不动。
                  ────────────────────────────────────────────────────────────────── -->
             <check if="判定为 Non-Bug（命中 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate 之一）">
-                <action>生成 Non-Bug Resolution Report 文本：包含
+                <action>生成 Non-Bug Resolution Report 文本，**将该段文本命名为 `{report_text}`**（供下方 phase-abort 宏 fields 字面引用），内容包含：
                         - 判定类别（5 选 1）
                         - 判定依据（对应 Spec 条款 / 复现路径 / 环境快照锚点）
                         - 沟通建议（一段面向 reporter 的回复要点，便于 step-pause 用户决策）
                         - 改进建议（可选；如对应 UX 工单 / Feature Request / 文档改进）</action>
 
-                <action>更新 {workflow_status}：non_bug_context = {上述 Non-Bug Resolution Report 文本}
-                        （D17：该字段是编排器 case Non-Bug step-pause 标题占位的唯一数据源；
-                         文本应足够 self-contained，使用户仅凭 step-pause 标题即可做出 Accept / Reflow 决策）</action>
-
-                <action>更新 {workflow_status}：current_state = Non-Bug</action>
-
-                <action>设置 current_phase_result = ABORT
-                        （D1：current_phase_result 是运行时变量，不入持久化 schema；
-                         本动作必须在返回编排器之前显式赋值，否则编排器 step 4 会将
-                         qa-spec-definition 错误追加到 stepsCompleted，B1* 主链路根因复发）</action>
-
-                <action>退出 phase（不再继续 step 5-9）</action>
+                <!-- v4.2 PR-3' / O21 / ADR-014 / v1.2 review Finding #1 收口：
+                     `{report_text}` 是上一 <action> 显式命名的本轮局部变量（非 workflow_status 字段），
+                     宏展开第 2 步将其原文写入 workflow_status.non_bug_context，
+                     供 D17 协议下编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用 -->
+                <phase-abort state="Non-Bug"
+                             fields='{"non_bug_context": "{report_text}"}'
+                             reason="ADR-014"/>
             </check>
         </step>
 
@@ -176,14 +158,8 @@
                             （部分置信度路径不早退；后续 step 9 仍输出三件套）</action>
                 </case>
                 <case if="< 0.4">
-                    <action>更新 {workflow_status}：current_state = Curation-Failed
-                            （C5：Curation-Failed 是 PR-1 schema 权威枚举集合内合法状态，
-                             与 system-prompt.md Phase 2 字段集对齐）</action>
-                    <action>设置 current_phase_result = ABORT
-                            （D1 / B1* 兜底：与变更点 P2-1 同协议；不显式标 ABORT 会让
-                             编排器把 qa-spec-definition 误追加到 stepsCompleted，
-                             导致后续重入策展时 stepsCompleted 失锚）</action>
-                    <action>退出 phase（不再继续 step 8-9）</action>
+                    <!-- v4.2 PR-3' / O21 / ADR-001：B1* 兜底，避免 stepsCompleted 错追加 -->
+                    <phase-abort state="Curation-Failed" reason="ADR-001"/>
                 </case>
             </switch>
         </step>
@@ -197,8 +173,12 @@
             <template-output file="{workspace_folder}/context-curation-report.md" template="mobile-qa-workflow/templates/context-curation-report.md"/>
             <template-output file="{output_spec}" template="mobile-qa-workflow/templates/spec.md"/>
             <template-output file="{output_context_bundle}" template="mobile-qa-workflow/templates/context-bundle.md"/>
-            <action>更新 {config_source}：增加 output_curation_report、output_spec、output_context_bundle 路径</action>
-            <action>更新 {workflow_status}：current_state = RCA-Designing</action>
+
+            <!-- v4.2 PR-3' / O21 / ADR-021 -->
+            <phase-complete state="RCA-Designing"
+                            update_config='{"output_curation_report": "{workspace_folder}/context-curation-report.md",
+                                            "output_spec": "{output_spec}",
+                                            "output_context_bundle": "{output_context_bundle}"}'/>
         </step>
     </workflow>
     ```

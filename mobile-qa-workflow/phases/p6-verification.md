@@ -17,19 +17,6 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
 - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
 ```xml
-<!--
-========================================================================
-幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
-
-1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
-   每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
-2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
-3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
-   单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
-4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
-   自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
-========================================================================
--->
 <workflow>
     <step n="1" goal="加载流程规范和上游产物">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
@@ -107,11 +94,8 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
             <template-output file="{output_verification}" template="mobile-qa-workflow/templates/verification-report.md"/>
             <action>更新 {config_source}：output_verification_report = {output_verification}</action>
 
-            <!-- B1*：P6 失败回流是 stop_state（current_state ∈ {Fix-Designing, RCA-Designing, Human-Review}），
-                 按 D1 协议必须 ABORT；编排器 step 4 检测 ABORT 后不追加 qa-verification 到 stepsCompleted,
-                 让回流目标 phase（qa-fix-design / qa-root-cause）能被重新执行。 -->
-            <action>设置 current_phase_result = ABORT</action>
-            <action>阶段结束，返回编排器</action>
+            <!-- v4.2 PR-3' / O21 / ADR-001 / state 占位字面 = 沿用上文 switch 已写入的 current_state（详见 ADR-021 §2 落地纪要） -->
+            <phase-abort state="{workflow_status}.current_state" reason="ADR-001"/>
         </check>
     </step>
 
@@ -129,10 +113,9 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
         <check if="{env_git} == false">
             <action>输出 Code Review Summary 文档，供人工创建 PR 时使用。</action>
         </check>
-        <!-- C5 收口延伸（与 P6-A6 同类）：current_state 终态必须落在 core/workflow-status-template.yaml
-             权威枚举集内；Done 是工作流完成态对应的合法终值，与编排器 step 4 case Done 路由自洽；
-             v3 字面残留的非枚举集终态值已收口替换。 -->
-        <action>更新 {workflow_status}：current_state = Done</action>
+
+        <!-- v4.2 PR-3' / O21 / ADR-021 + C5 收口 / Done 是工作流终态 -->
+        <phase-complete state="Done"/>
     </step>
 </workflow>
 ```

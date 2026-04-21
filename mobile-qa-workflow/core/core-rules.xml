@@ -175,6 +175,43 @@
             <tag name="ask"><rule>向用户提问，必须使用封闭式/选择题形式，等待用户响应后继续</rule><params><param name="questions">需要询问用户的问题</param></params></tag>
             <tag name="try"><rules><rule>先执行 try 主流程，失败则重试最多 retry 次</rule><rule>任一次成功立即结束，禁止执行 catch</rule><rule>全部重试失败后才执行 catch</rule></rules><params><param name="retry">重试次数，默认 1</param></params></tag>
             <tag name="template-output"><rule>按模板保存产物到工作区文件</rule><params><param name="file">输出文件路径</param><param name="template">模板文件路径</param></params></tag>
+
+            <tag name="phase-abort">
+                <rules>
+                    <rule>Phase 早退的声明式宏标签（v4.2 / O21 / 详见 ADR-021）。</rule>
+                    <rule critical="true">展开等价于以下 4 个动作（LLM 必须按顺序逐个执行，不得跳过）：
+                        1. <action>更新 {workflow_status}：current_state = {state}（state 以 `{` 开头时表示沿用上文已写值）</action>
+                        2. <action>更新 {workflow_status}：{fields} 中的全部 key-value（"+1" 表示自增）</action>（仅当属性存在）
+                        3. <action>设置 current_phase_result = ABORT</action>
+                        4. <action>退出本 phase（编排器 step 4 case 接管，按 current_state 路由）</action>
+                    </rule>
+                    <rule>禁止在 phase-abort 之后继续执行任何 step。</rule>
+                </rules>
+                <params>
+                    <param name="state" required="true">目标 current_state（必须在权威枚举集内 / 或形如 `{workflow_status}.current_state` 的占位字面）</param>
+                    <param name="fields" required="false">附加写回字段，JSON 字面量（支持 "+1" 自增）</param>
+                    <param name="reason" required="false">触发原因引用（建议用 ADR-XXX 形式）</param>
+                </params>
+            </tag>
+
+            <tag name="phase-complete">
+                <rules>
+                    <rule>Phase 正常完成的声明式宏标签（v4.2 / O21 / 详见 ADR-021）。</rule>
+                    <rule critical="true">展开等价于以下 5 个动作：
+                        1. <action>更新 {workflow_status}：current_state = {state}</action>
+                        2. <action>更新 {workflow_status}：{fields} 中的全部 key-value</action>（仅当属性存在）
+                        3. <action>更新 {workflow_status}.phase_history：append {append_history}</action>（仅当属性存在）
+                        4. <action>更新 {config_source}：{update_config} 中的全部 key-value</action>（仅当属性存在）
+                        5. <action>退出本 phase（按 D1 默认 OK，编排器追加 stepsCompleted）</action>
+                    </rule>
+                </rules>
+                <params>
+                    <param name="state" required="true">目标 current_state</param>
+                    <param name="fields" required="false">JSON 字面量</param>
+                    <param name="append_history" required="false">phase_history 追加项 JSON 字面量</param>
+                    <param name="update_config" required="false">config_source 批量注册项 JSON 字面量</param>
+                </params>
+            </tag>
         </execution>
     </supported-tags>
 

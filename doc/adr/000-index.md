@@ -28,7 +28,7 @@
 | [ADR-018](./018-parse-error-circuit-breaker.md) | `parse_error_count` 持久化 + 4 类生命周期动作 | active | D18 | v4.1 PR-1 + PR-2（已合入） |
 | [ADR-019](./019-legacy-step-pause-allowlist.md) | legacy phase `<step-pause>` allowlist 实体化交付 | active | D19 | v4.1 PR-5 + PR-8（已合入） |
 | [ADR-020](./020-v43-long-term-evolution.md) | v4.3 长期演进规划占位 | superseded-by-v4.3-plan | D20 | v4.3 立项启动 |
-| [ADR-021](./021-phase-abort-macro-tags.md) | `<phase-abort>` / `<phase-complete>` 宏标签 | **draft** | V1.1 O21 | **v4.2 PR-3（落地依赖）** |
+| [ADR-021](./021-phase-abort-macro-tags.md) | `<phase-abort>` / `<phase-complete>` 宏标签 | active | V1.1 O21 | v4.2 PR-3'（已合入） |
 
 ## 引用规范
 

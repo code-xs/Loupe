@@ -15,19 +15,6 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
 - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
 ```xml
-<!--
-========================================================================
-幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
-
-1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
-   每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
-2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
-3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
-   单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
-4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
-   自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
-========================================================================
--->
 <workflow>
     <step n="1" goal="加载流程规范和上游产物">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
@@ -121,9 +108,8 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
         <check if="{output_error_dump} 文件存在">
             <action>Execution-Status = Human-Review</action>
             <action>读取 error-dump.md，输出 Human-Review 通知</action>
-            <action>更新 {workflow_status}: current_state = Human-Review</action>
-            <action>current_phase_result = ABORT</action>
-            <goto step="8"/>
+            <!-- v4.2 PR-3' / O21 / ADR-001 / goto step="8" 删除（宏第 4 步退出 phase 让 step 8 不可达） -->
+            <phase-abort state="Human-Review" reason="ADR-001"/>
         </check>
 
         <!-- 优先级 2：impl-report 存在 且 error-dump 不存在 -->
@@ -140,18 +126,16 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
             <check if="Repair-Route = code-fix 且 {output_contract_checklist} 不存在">
                 <action>Execution-Status = Incomplete</action>
                 <action>标记 [MISSING-REQUIRED-ARTIFACT: contract-checklist.md]</action>
-                <action>更新 {workflow_status}: current_state = Human-Review</action>
-                <action>current_phase_result = ABORT</action>
-                <goto step="8"/>
+                <!-- v4.2 PR-3' / O21 / ADR-001 -->
+                <phase-abort state="Human-Review" reason="ADR-001"/>
             </check>
         </check>
 
         <!-- 优先级 3：两个产物均不存在 -->
         <check if="{output_impl_report} 文件不存在 且 {output_error_dump} 不存在">
             <action>Execution-Status = Incomplete</action>
-            <action>更新 {workflow_status}: current_state = Human-Review</action>
-            <action>current_phase_result = ABORT</action>
-            <goto step="8"/>
+            <!-- v4.2 PR-3' / O21 / ADR-001 -->
+            <phase-abort state="Human-Review" reason="ADR-001"/>
         </check>
     </step>
 
@@ -163,11 +147,15 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
         <check if="Repair-Route = code-fix">
             <action>保留 Coder Agent 已生成的 impl-report.md，禁止使用模板覆写实施结果</action>
         </check>
-        <action>更新 {config_source}：
-            output_impl_report = {output_file}
-            output_contract_checklist = {output_contract_checklist}（若存在）
-        </action>
-        <action>更新 {workflow_status}：current_state = Verifying</action>
+
+        <!-- v4.2 PR-3' / O21 / 条件写入显式拆出宏外（宏 update_config 不支持按单 key 跳过 / v1.1 review Finding #3） -->
+        <check if="{output_contract_checklist} 文件存在">
+            <action>更新 {config_source}：output_contract_checklist = {output_contract_checklist}</action>
+        </check>
+
+        <!-- v4.2 PR-3' / O21 / ADR-021 -->
+        <phase-complete state="Verifying"
+                        update_config='{"output_impl_report": "{output_file}"}'/>
     </step>
 
     <step n="8" goal="失败路径收口">

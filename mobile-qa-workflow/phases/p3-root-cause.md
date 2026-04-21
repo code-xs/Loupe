@@ -15,19 +15,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
 - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
 ```xml
-<!--
-========================================================================
-幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
-
-1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
-   每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
-2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
-3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
-   单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
-4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
-   自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
-========================================================================
--->
 <workflow>
     <step n="1" goal="加载流程规范和上游产物">
         <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>
@@ -38,9 +25,8 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <action>检查 Context Bundle 证据质量：至少 1 条 A 级证据，或 2 条 B 级证据；分类 Spec 扩展模块 >= 50% 关键字段已填充。</action>
         <check if="纯 C 级证据，阈值未通过">
             <action>列出需要补充的具体证据项</action>
-            <action>更新 {workflow_status}：current_state = Spec-Defining</action>
-            <action>设置 current_phase_result = ABORT</action>
-            <action>阶段结束，返回编排器</action>
+            <!-- v4.2 PR-3' / O21 / ADR-001 -->
+            <phase-abort state="Spec-Defining" reason="ADR-001"/>
         </check>
     </step>
 
@@ -75,15 +61,14 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
             <action>单视角执行 OVHSC 五步推理：OBSERVE -> HYPOTHESIZE -> VERIFY -> SCORE -> CHAIN。</action>
             <action>执行反事实校验；若发现更精确边界，则 current_state = Boundary-Refined。</action>
             <check if="反事实校验失败 或 最终置信度 < 0.70 或 出现新证据冲突">
-                <action>更新 {workflow_status}：
-                    - fanout_mode = medium-challenge
-                    - reroute_reason = simple_path_not_closed
-                    - reroute_from_phase = qa-root-cause
-                    - reroute_target_phase = qa-root-cause
-                    - rca_retry_count += 1
-                </action>
-                <action>设置 current_phase_result = ABORT</action>
-                <action>阶段结束，返回编排器</action>
+                <!-- v4.2 PR-3' / O21 / ADR-015 -->
+                <phase-abort state="RCA-Designing"
+                             fields='{"fanout_mode": "medium-challenge",
+                                      "reroute_reason": "simple_path_not_closed",
+                                      "reroute_from_phase": "qa-root-cause",
+                                      "reroute_target_phase": "qa-root-cause",
+                                      "rca_retry_count": "+1"}'
+                             reason="ADR-015"/>
             </check>
         </check>
 
@@ -114,15 +99,14 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 <action>顺序模拟 Investigator + Challenger：使用 1 个主策略完成 OVHSC，再执行 `rca-5d` 质疑。</action>
             </check>
             <check if="challenger 出现 Critical 或 最终置信度 < 0.65">
-                <action>更新 {workflow_status}：
-                    - fanout_mode = complex-arbitrated
-                    - reroute_reason = medium_path_escalated
-                    - reroute_from_phase = qa-root-cause
-                    - reroute_target_phase = qa-root-cause
-                    - rca_retry_count += 1
-                </action>
-                <action>设置 current_phase_result = ABORT</action>
-                <action>阶段结束，返回编排器</action>
+                <!-- v4.2 PR-3' / O21 / ADR-015 -->
+                <phase-abort state="RCA-Designing"
+                             fields='{"fanout_mode": "complex-arbitrated",
+                                      "reroute_reason": "medium_path_escalated",
+                                      "reroute_from_phase": "qa-root-cause",
+                                      "reroute_target_phase": "qa-root-cause",
+                                      "rca_retry_count": "+1"}'
+                             reason="ADR-015"/>
             </check>
         </check>
 
@@ -165,16 +149,14 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 <action>顺序模拟 2 个 Investigator + Challenger + Arbiter。</action>
             </check>
             <check if="对抗轮次超过 3 轮仍未收敛">
-                <action>更新 {workflow_status}：
-                    - fanout_mode = complex-arbitrated
-                    - reroute_reason = multi_view_non_convergent
-                    - reroute_from_phase = qa-root-cause
-                    - reroute_target_phase = qa-root-cause
-                    - rca_retry_count += 1
-                    - current_state = Human-Review
-                </action>
-                <action>设置 current_phase_result = ABORT</action>
-                <action>阶段结束，返回编排器</action>
+                <!-- v4.2 PR-3' / O21 / ADR-015 + ADR-014（Human-Review 协议触发） -->
+                <phase-abort state="Human-Review"
+                             fields='{"fanout_mode": "complex-arbitrated",
+                                      "reroute_reason": "multi_view_non_convergent",
+                                      "reroute_from_phase": "qa-root-cause",
+                                      "reroute_target_phase": "qa-root-cause",
+                                      "rca_retry_count": "+1"}'
+                             reason="ADR-015"/>
             </check>
         </check>
     </step>
@@ -224,24 +206,26 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
 
     <step n="10" goal="输出 Root Cause Report">
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
-        <action>更新 {config_source}：output_rca_report = {output_file}</action>
-
-        <!-- ADR-007 (v4.2 PR-2 修订)：方案 A (phase_history 顺序历史) 是主路径；
-             snapshot 字段已删除（O7），P3 重入时由 phase_history 反查最近一条
-             qa-root-cause 元素的 fanout_mode；写入顺序：phase_history.append 在下方
-             stop 路径强制重写之前执行，确保记录的是"P3 本次完成时 fanout_mode 的自然取值"。 -->
-        <action>更新 {workflow_status}.phase_history：append { phase: "qa-root-cause", timestamp: &lt;now ISO8601&gt;, fanout_mode: {fanout_mode}, note: null }</action>
 
         <check if="最终置信度 >= 0.5">
-            <action>更新 {workflow_status}：current_state = Fix-Designing, reroute_reason = null, reroute_target_phase = null</action>
-            <!-- 成功完成路径：不写 current_phase_result，按 D1 默认行为视作 OK，
-                 编排器 step 4 把 qa-root-cause 追加到 stepsCompleted -->
+            <!-- v4.2 PR-3' / O21 / ADR-021 + ADR-007 (v4.2 PR-2 修订)：
+                 phase_history.append 在 stop 路径之前执行，记录"P3 本次完成时 fanout_mode 的自然取值"；
+                 成功路径按 D1 默认 OK，编排器 step 4 追加 qa-root-cause 到 stepsCompleted。 -->
+            <phase-complete state="Fix-Designing"
+                            fields='{"reroute_reason": null,
+                                     "reroute_target_phase": null}'
+                            append_history='{"phase": "qa-root-cause", "timestamp": "&lt;now ISO8601&gt;", "fanout_mode": "{fanout_mode}", "note": null}'
+                            update_config='{"output_rca_report": "{output_file}"}'/>
         </check>
         <check if="最终置信度 < 0.5">
-            <action>更新 {workflow_status}：current_state = RCA-LowConfidence, fanout_mode = complex-arbitrated, reroute_reason = low_final_confidence, reroute_from_phase = qa-root-cause, reroute_target_phase = qa-root-cause, rca_retry_count += 1</action>
-            <action>设置 current_phase_result = ABORT</action>
-            <!-- B1* 关键修复：RCA-LowConfidence 是 stop_state，phase 不应被算作完成；
-                 编排器 step 4 case RCA-LowConfidence 由 PR-2 变更点 W6 触发 step-pause -->
+            <!-- v4.2 PR-3' / O21 / ADR-001 + B1* 关键修复 -->
+            <phase-abort state="RCA-LowConfidence"
+                         fields='{"fanout_mode": "complex-arbitrated",
+                                  "reroute_reason": "low_final_confidence",
+                                  "reroute_from_phase": "qa-root-cause",
+                                  "reroute_target_phase": "qa-root-cause",
+                                  "rca_retry_count": "+1"}'
+                         reason="ADR-001"/>
         </check>
     </step>
 </workflow>

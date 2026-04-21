@@ -21,7 +21,7 @@
 | [ADR-011](./011-ci-entry-point.md) | CI 起点 = `.github/workflows/qa-workflow-schema-check.yml` | active | D11 | v4.1 PR-8（已合入） |
 | [ADR-012](./012-install-trae-shim.md) | `install_trae.sh` 改为 shim 调用 | active | D12 | v4.1 PR-7（已合入） |
 | [ADR-013](./013-migrate-script-path.md) | 迁移脚本路径锁定 `mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py` | active | D13 | v4.1 PR-1（已合入） |
-| [ADR-014](./014-step-pause-scope-restriction.md) | `<step-pause>` 调度作用域限定（仅编排器 step 4） | active | D14 | v4.1 PR-1 + PR-2（已合入） |
+| [ADR-014](./014-step-pause-scope-restriction.md) | `<step-pause>` 调度作用域限定（仅编排器 step 4） | active | D14 | v4.1 PR-1 + PR-2（已合入） + v4.2 PR-3' 修订 |
 | [ADR-015](./015-userinputs-mirror-allowlist.md) | `user_inputs` 顶层镜像白名单受限双写 | active | D15 | v4.1 PR-1 + PR-2（已合入） |
 | [ADR-016](./016-step-pause-required-params.md) | `<step-pause>` 必填参数表（`title` / `result_field` / `allowed_values`） | active | D16 | v4.1 PR-1（已合入） |
 | [ADR-017](./017-non-bug-context-persistence.md) | `non_bug_context` 字段入 schema 持久化 | active | D17 | v4.1 PR-1（已合入） |

@@ -85,6 +85,33 @@ v4.1 完整集合（按 workflow-status-template.yaml 头部顺序）：
     </human-review-protocol>
 </core-rules>
 
+## 0.2 Phase 出口宏标签展开规则（O21 / ADR-021 / v4.2 PR-3'）
+
+> 本节为 Limited 平台（Dify / Coze / OpenAI Assistants 等）的兜底展开规则；Full 平台（Cursor / Trae）也建议保留作为 LLM 行为锚点。
+> 任何 phase 文件（`mobile-qa-workflow/phases/**`）出现的 `<phase-abort>` / `<phase-complete>` 标签，LLM 必须按以下规则**原子展开**（每条 sub-action 必须在同一 LLM 输出轮次内全部执行，禁止跨轮次拆分）。
+
+### `<phase-abort state="..." [fields="..."] [reason="..."] />` 4 步展开
+
+1. `<action>更新 {workflow_status}：current_state = <state></action>`（**特例**：当 `state` 字面以 `{` 开头时，表示沿用本 step 内已写入的 current_state，不重新赋值，详见 ADR-021 §2 落地纪要）
+2. `<action>更新 {workflow_status}：fields 内全部 key=value（特殊语法："+1" 表示对该字段自增 1）</action>`（仅当 `fields` 属性存在）
+3. `<action>设置 current_phase_result = ABORT</action>`（**绝对禁止**漏写 — D1 协议依赖此变量决定 stepsCompleted 是否追加）
+4. `<action>退出本 phase（编排器 step 4 case 接管，按 current_state 路由到对应 step-pause）</action>`
+
+### `<phase-complete state="..." [fields="..."] [append_history="..."] [update_config="..."] />` 5 步展开
+
+1. `<action>更新 {workflow_status}：current_state = <state></action>`
+2. `<action>更新 {workflow_status}：fields 内全部 key=value</action>`（仅当 `fields` 属性存在）
+3. `<action>更新 {workflow_status}.phase_history：append <append_history></action>`（仅当 `append_history` 属性存在；元素结构含 phase / timestamp / fanout_mode / note）
+4. `<action>更新 {config_source}：update_config 内全部 key=value</action>`（仅当 `update_config` 属性存在）
+5. `<action>退出本 phase（按 D1 默认 OK，编排器 step 4 追加本 phase 到 stepsCompleted）</action>`
+
+### 绝对禁止清单
+
+- ❌ 漏写 `<phase-abort>` 第 3 步 ABORT（违反 D1 → stepsCompleted 错误追加 → B1* 主链路 bug 复发）
+- ❌ 把 `fields` 内字段拆出宏外单独写 `<action>` （违反原子性 → CI Check 15 报警）
+- ❌ 在 `<phase-abort>` 与 `<phase-complete>` 之间互相嵌套（语义冲突 → 行为未定义）
+- ❌ 跨 LLM 输出轮次拆分宏的 sub-action（每个宏必须在单轮内完成 4/5 步全部执行）
+
 ## 0.1 角色口径
 
 - **业务角色**：`curator`、`investigator`、`challenger`、`arbiter`、`fix-proposer`、`coder-agent`、Functionality Deep-Dive 复合角色。

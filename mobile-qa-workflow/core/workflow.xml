@@ -185,21 +185,40 @@
                     <case if="Spec-Uncertain">
                         <action>更新 {workflow_status}：parse_error_count = 0</action>
 
-                        <step-pause title="Spec 存在歧义，需要确认 Expected Behavior：
+                        <!-- v4.2 PR-3' / Seg-2 / O13a / ADR-014 v4.2 修订：契约统一 Confirm 单选 → 1|2|S 三选；
+                             与 phases/p2-spec-definition.md L66-75 内联段（PR-6 删除前）契约一致。
+                             P2 进入本 case 前必须已写入 spec_options 与 option_1 / option_2 字面。
+                             selected_spec_index 仅协议显式化（v1.2 review Finding #2 收口），
+                             P2 行为差异化能力留 PR-7 O15。 -->
+                        <step-pause title="Spec 存在歧义，请确认 Expected Behavior：
 {spec_options}
 
 [result_field=spec_uncertain_choice]
-[allowed_values=Confirm]
-请用 spec_uncertain_choice=Confirm 回复"
+[allowed_values=1|2|S]
+请用 spec_uncertain_choice=&lt;value&gt; 回复"
                                     result_field="spec_uncertain_choice"
-                                    allowed_values="Confirm">
-                            <option title="[C] Confirm：确认后继续，回流 qa-spec-definition"
-                                    action="spec_uncertain_choice=Confirm"/>
+                                    allowed_values="1|2|S">
+                            <option title="[1] {option_1}（采纳第 1 种 Expected Behavior 继续）"
+                                    action="spec_uncertain_choice=1"/>
+                            <option title="[2] {option_2}（采纳第 2 种 Expected Behavior 继续）"
+                                    action="spec_uncertain_choice=2"/>
+                            <option title="[S] Skip：先并行分析所有可能，后续确认"
+                                    action="spec_uncertain_choice=S"/>
                         </step-pause>
 
                         <switch condition="{user_inputs.spec_uncertain_choice}">
-                            <case if="Confirm">
-                                <action>更新 {workflow_status}：current_state = Spec-Defining</action>
+                            <case if="1">
+                                <action>更新 {workflow_status}：current_state = Spec-Defining, selected_spec_index = 1</action>
+                                <action>清空 {workflow_status}.user_inputs.spec_uncertain_choice</action>
+                                <goto step="2"/>
+                            </case>
+                            <case if="2">
+                                <action>更新 {workflow_status}：current_state = Spec-Defining, selected_spec_index = 2</action>
+                                <action>清空 {workflow_status}.user_inputs.spec_uncertain_choice</action>
+                                <goto step="2"/>
+                            </case>
+                            <case if="S">
+                                <action>更新 {workflow_status}：current_state = Spec-Defining, selected_spec_index = parallel</action>
                                 <action>清空 {workflow_status}.user_inputs.spec_uncertain_choice</action>
                                 <goto step="2"/>
                             </case>

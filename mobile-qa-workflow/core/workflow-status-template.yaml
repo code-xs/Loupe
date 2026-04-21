@@ -36,6 +36,14 @@ schema_version: 4    # v4.1：3 → 4（v2.0 P0-3）；迁移脚本路径见 mob
 analysis_complexity: null
 analysis_complexity_confidence: null
 
+# v4.2 PR-3' / Seg-2 / O13a / ADR-014 v4.2 修订（v1.2 review Finding #2 收口：仅协议显式化，无消费方）：
+# Spec-Uncertain step-pause 用户回复后由编排器 step 4 case Spec-Uncertain 写入；
+# 取值含义：1 = 采纳第 1 种 Expected Behavior / 2 = 采纳第 2 种 / parallel = 先并行分析所有可能；
+# v4.2 阶段：本字段仅"写入"，P2 暂不消费，不引入 P2 行为变化（用户在 Cursor 选 1 / 2 / S 仅影响弹窗 UI，
+# 实际 P2 内联段继续按当前逻辑执行）；P2 实际按 selected_spec_index 路由的能力留 PR-7 O15 收敛。
+# 兼容性：v3 / v4 老会话 selected_spec_index 字段不存在 → default 视作 null。
+selected_spec_index: null
+
 # fanout_mode 命名约束（D7）：保留为 RCA 字段，不重命名为 rca_fanout_mode；
 # Fix 阶段一律改写 fix_fanout_mode（C10 字段隔离）。
 fanout_mode: null

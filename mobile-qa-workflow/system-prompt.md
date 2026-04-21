@@ -1,3 +1,34 @@
+<!--
+========================================================================
+AUTOGEN-FROM:
+  core/core-rules.xml
+  core/workflow.xml
+  core/workflow-status-template.yaml
+  core/default-config.yaml
+  core/workflow-model.yaml
+  (PR-5 起增加：core/step-pause-registry.yaml)
+
+@ schema_version=4
+@ sync-check=2026-04-21（PR-1 落地基线）
+
+⚠️ 本文件当前为"手维护"状态：
+   - PR-2 起：CI `check-system-prompt-sync.sh` 升级为 error，本文件任何手改必须同步更新 core/
+   - PR-2 起：交付 `scripts/build-system-prompt.py` 生成器（仅交付脚本，不替换本文件）
+   - PR-6 起：本文件由生成器**首次自动构建并替换**；之后禁止手改
+========================================================================
+-->
+
+<!-- ENUM-DECLARATION-BLOCK -->
+<!--
+本块由 CI `check-system-prompt-sync.sh` 与 core/workflow-status-template.yaml 头部 enum 集做"声明块对声明块"严格比对。
+本块内容必须与 core/workflow-status-template.yaml 头部 v4.1 完整集合 100% 一致（含顺序 + 名称大小写）。
+v4.1 完整集合（按 workflow-status-template.yaml 头部顺序）：
+  Intake, Spec-Defining, Spec-Uncertain, Context-Curating, Curation-Failed, Boundary-Refined,
+  Non-Bug, Info-Insufficient, RCA-Designing, RCA-LowConfidence, Fix-Designing, Fix-Implementing,
+  Verifying, Human-Review, Done
+-->
+<!-- /ENUM-DECLARATION-BLOCK -->
+
 # Mobile B2C 质量问题工作流 — 完整 System Prompt
 
 > **适用场景**：不支持外部文件引用的 AI 平台（Dify、Coze、OpenAI Assistants、LangChain Agent、
@@ -200,7 +231,7 @@ Verifying → implementation_mismatch    → Fix-Designing
     <step n="5" goal="优先级评估">
         <action>P0-Critical / P1-High / P2-Medium / P3-Low</action>
     </step>
-    <step n="5" goal="输出 Issue Card">
+    <step n="6" goal="输出 Issue Card">
         <template-output template="issue-card"/>
     </step>
 </workflow>

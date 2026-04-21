@@ -1,6 +1,6 @@
 # Mobile B2C 质量工作流 — 施工文档（v4.1 修订版）
 
-> **状态**：📐 **大纲 v2.2（已吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 全部 3 项裁定，含 v2.1 全量决定）**
+> **状态**：📐 **大纲 v2.2（已吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 全部 3 项裁定，含 v2.1 全量决定）**
 > **唯一上游输入**：[`QUALITY-AUDIT-REPORT-v1.2.1.md`](./QUALITY-AUDIT-REPORT-v1.2.1.md)
 > **施工目标版本**：`v4.1`（小迭代，schema_version 3 → 4，迁移脚本兜底兼容旧会话）
 > **预算上限**：**≤ 5.2 人日**（v2.2 实际约 4.9d，留 0.3d buffer；D14 把 phase 内 step-pause 全面治理收窄到 v4.2 遗留 #6）
@@ -9,7 +9,7 @@
 
 ## v2.2 修订摘要（v2.1 → v2.2，吸收 v2.1-REVIEW 全部 3 项裁定）
 
-> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 的全部 3 项裁定（2 P0 + 1 P1，全部全采纳）：
+> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 的全部 3 项裁定（2 P0 + 1 P1，全部全采纳）：
 
 | # | v2.1 中的问题 | v2.2 处理 |
 |---|---|---|
@@ -32,7 +32,7 @@
 
 ## v2.1 修订摘要（v2.0 → v2.1，吸收 v2-REVIEW 全部 3 项裁定）
 
-> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2-REVIEW.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-v2-REVIEW.md) 的全部 3 项裁定（1 P0 + 2 P1，全部全采纳）：
+> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-v2-REVIEW.md) 的全部 3 项裁定（1 P0 + 2 P1，全部全采纳）：
 
 | # | v2.0 中的问题 | v2.1 处理 |
 |---|---|---|
@@ -55,7 +55,7 @@
 
 ## v2.0 修订摘要（v1.0 → v2.0，吸收第二轮 review）（保留供追溯）
 
-> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v1-REVIEW.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-v1-REVIEW.md) 的全部 5 项裁定（3 P0 + 2 P1，全部全采纳）：
+> 本版本吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-v1-REVIEW.md) 的全部 5 项裁定（3 P0 + 2 P1，全部全采纳）：
 
 | # | v1.0 中的问题 | v2.0 处理 |
 |---|---|---|
@@ -81,7 +81,7 @@
 
 ## v1.0 修订摘要（保留供追溯）
 
-> 见 v1.0 附录 C / [QUALITY-AUDIT-CONSTRUCTION-PLAN-REVIEW-2026-04-20.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-REVIEW-2026-04-20.md)。核心拍板：方案 A（`current_phase_result` 运行时变量）、step-pause `<input-protocol>`、tag 白名单边界、范围口径双层化、PR 层级标签、Deep-Dive 键名映射延后。
+> 见 v1.0 附录 C / [QUALITY-AUDIT-CONSTRUCTION-PLAN-REVIEW-2026-04-20.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-REVIEW-2026-04-20.md)。核心拍板：方案 A（`current_phase_result` 运行时变量）、step-pause `<input-protocol>`、tag 白名单边界、范围口径双层化、PR 层级标签、Deep-Dive 键名映射延后。
 
 ---
 
@@ -807,6 +807,6 @@ git push origin main
 
 ---
 
-> **大纲版本**：v2.2（吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 全部 3 项裁定；含 v1.0/v2.0/v2.1/v2.2 全量决定 D1-D19）
+> **大纲版本**：v2.2（吸收 [QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-CONSTRUCTION-PLAN-v2.1-REVIEW.md) 全部 3 项裁定；含 v1.0/v2.0/v2.1/v2.2 全量决定 D1-D19）
 > **下一步**：所有协议/工程/路径/DSL 决定已锁定（D1-D19），可直接逐 PR 展开 §4 详细施工单。
 > **建议第一个展开的 PR**：**PR-1**（协议层），其余所有 PR 的字段名/标签/协议/路径/DSL 参数表都依赖 PR-1 定型。

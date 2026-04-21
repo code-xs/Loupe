@@ -8,7 +8,7 @@
 
 ## v1.2.1 修订摘要（本轮 3 项收口）
 
-> 本版本响应 [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.2-REVIEW.md) 3 项 Minor 级 review 反馈，全部经源码核验后采纳：
+> 本版本响应 [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.2-REVIEW.md) 3 项 Minor 级 review 反馈，全部经源码核验后采纳：
 
 | # | v1.2 中的问题 | v1.2.1 处理 |
 |---|---|---|
@@ -22,7 +22,7 @@
 
 ## v1.2 修订摘要（本轮 4 项精修，保留供追溯）
 
-> 本版本响应 [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.1-REVIEW.md) 4 项 review 级反馈，全部经源码核验后采纳：
+> 本版本响应 [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.1-REVIEW.md) 4 项 review 级反馈，全部经源码核验后采纳：
 
 | # | v1.1 中的问题 | v1.2 处理 |
 |---|---|---|
@@ -43,7 +43,7 @@
 
 ## v1.1 历史修订摘要（保留供追溯）
 
-> 本版本响应 [QUALITY-AUDIT-REVIEW.md](./QUALITY-AUDIT-REVIEW.md) 的核验反馈：
+> 本版本响应 [QUALITY-AUDIT-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REVIEW.md) 的核验反馈：
 
 | 修订类型 | 原条目 | 处理 |
 |---|---|---|
@@ -570,7 +570,7 @@ flowchart TD
 ### B.1　v0 → v1.0
 - 首次完整审计，41 项缺陷台账。
 
-### B.2　v1.0 → v1.1（响应 [QUALITY-AUDIT-REVIEW.md](./QUALITY-AUDIT-REVIEW.md)）
+### B.2　v1.0 → v1.1（响应 [QUALITY-AUDIT-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REVIEW.md)）
 
 | 类型 | 条目 | 变更说明 |
 |---|---|---|
@@ -589,7 +589,7 @@ flowchart TD
 | 评分调整 | 综合分 6.0 → 5.8 | 同上 |
 | 工作量调整 | 3.7d → 5.2d | 新增 C10/C11/M16 + ABORT 协议落地扩大范围 |
 
-### B.3　v1.1 → v1.2（响应 [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.1-REVIEW.md)）  *【已稳定，本节内容下沉为历史】*
+### B.3　v1.1 → v1.2（响应 [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.1-REVIEW.md)）  *【已稳定，本节内容下沉为历史】*
 
 | 类型 | 条目 | 变更说明 |
 |---|---|---|
@@ -606,7 +606,7 @@ flowchart TD
 
 ---
 
-### B.4　v1.2 → v1.2.1（响应 [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.2-REVIEW.md)，3 项 Minor 收口）
+### B.4　v1.2 → v1.2.1（响应 [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.2-REVIEW.md)，3 项 Minor 收口）
 
 | 类型 | 条目 | 变更说明 |
 |---|---|---|
@@ -619,8 +619,8 @@ flowchart TD
 ---
 
 **报告完成（v1.2.1）** · 致谢三轮 review：
-1. [QUALITY-AUDIT-REVIEW.md](./QUALITY-AUDIT-REVIEW.md) — v1.0 → v1.1（撤回 m7、修订 M5/B1/B2，新增 C10/C11/M16，引入系统性根因与单一权威源治理章节）
-2. [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.1-REVIEW.md) — v1.1 → v1.2（统计双口径、C10 枚举更正、B1\* 证据收窄、C3→M17 降级）
-3. [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./QUALITY-AUDIT-REPORT-v1.2-REVIEW.md) — v1.2 → v1.2.1（范围口径、C10 兼容性收紧、动作清单计数自洽）
+1. [QUALITY-AUDIT-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REVIEW.md) — v1.0 → v1.1（撤回 m7、修订 M5/B1/B2，新增 C10/C11/M16，引入系统性根因与单一权威源治理章节）
+2. [QUALITY-AUDIT-REPORT-v1.1-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.1-REVIEW.md) — v1.1 → v1.2（统计双口径、C10 枚举更正、B1\* 证据收窄、C3→M17 降级）
+3. [QUALITY-AUDIT-REPORT-v1.2-REVIEW.md](./archive/v4.1-history/QUALITY-AUDIT-REPORT-v1.2-REVIEW.md) — v1.2 → v1.2.1（范围口径、C10 兼容性收紧、动作清单计数自洽）
 
 如需直接落地这些修复，可按"推荐落地动作清单"逐项创建 PR；建议优先级为 **B1\* + C10 + C11 三件套**（系统性根因 + 字段污染 + IPC 协议），约 1.7 人日即可解决最深层的协议缺失。后续如需 PR 级 diff 与迁移脚本，请进一步出"施工文档" `QUALITY-AUDIT-CONSTRUCTION-PLAN.md`。

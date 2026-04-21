@@ -89,11 +89,11 @@
                         <agent name="deep-dive-race-and-isolation-analyst" scenario="时序+隔离">竞态、时序窗口、隔离推演与候选排序</agent>
                         <agent name="deep-dive-arbiter" scenario="专项质疑+仲裁">先质疑后裁定，输出主根因与贡献因子</agent>
                         <agent name="defensive-fix-architect" scenario="防御性修复">状态机加固、竞态收敛和适度性修复设计</agent>
-                        <agent name="context-reconstructor" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
-                        <agent name="state-analyst" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
-                        <agent name="temporal-analyst" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
-                        <agent name="challenger" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
-                        <agent name="arbiter" scenario="兼容旧会话">已废弃，仅供历史会话恢复</agent>
+                        <agent name="context-reconstructor" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
+                        <agent name="state-analyst" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
+                        <agent name="temporal-analyst" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
+                        <agent name="challenger" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用 / 与同 agent-group main-workflow 中的 challenger 同名但隔离</agent>
+                        <agent name="arbiter" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用 / 与同 agent-group main-workflow 中的 arbiter 同名但隔离</agent>
                     </agent-group>
                 </available-agents>
             </tag>

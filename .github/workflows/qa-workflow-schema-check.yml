@@ -306,3 +306,33 @@ jobs:
             echo "[D18-OK] all 4 parse_error_count lifecycle actions present (a/b/c/d)"
           fi
           exit $fail
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 9（v4.2 PR-1 启用）：state enum 守门 / V1.1 §3.1 O5 / 主控 §4 / 等级：error
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 9 — state enum 守门
+        run: bash mobile-qa-workflow/scripts/check-state-enum.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 10（v4.2 PR-1 启用 warning，PR-2 升级 error）：system-prompt sync 守门
+      #   v1.1 算法 = 声明块对声明块 + 高风险 token 白名单
+      # ════════════════════════════════════════════════════════════════
+      - name: "Check 10 — system-prompt sync 守门（PR-1: warning）"
+        env:
+          SP_SYNC_SEVERITY: warning
+        run: bash mobile-qa-workflow/scripts/check-system-prompt-sync.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 11（v4.2 PR-1 启用 warning，PR-2 评估升级 error）：io-contract 守门
+      #   v1.1 算法 = basename 匹配 + 变量化路径兜底
+      # ════════════════════════════════════════════════════════════════
+      - name: "Check 11 — io-contract 守门（PR-1: warning）"
+        env:
+          IO_CONTRACT_SEVERITY: warning
+        run: bash mobile-qa-workflow/scripts/check-io-contract.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 12（v4.2 PR-1 启用）：subagent-params 守门（v1.1 含双向反向断言）/ 等级：error
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 12 — subagent-params 守门
+        run: bash mobile-qa-workflow/scripts/check-subagent-params.sh

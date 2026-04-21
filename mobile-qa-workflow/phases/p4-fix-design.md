@@ -16,6 +16,19 @@
     - workflow_status: '{workspace_folder}/workflow-status.yaml'
 
     ```xml
+    <!--
+    ========================================================================
+    幂等性约束（V1.1 O6 / 过渡期约束 / O21 落地后失效）
+
+    1. 同一 step 内对 workflow_status.current_state 的写入只允许一次（含 switch
+       每个 case 内一次）；reviewer 应可一眼数清状态写入点位。
+    2. 状态写入是幂等的：同值重写不影响下游编排器路由（参考 ADR-001 D1 协议）。
+    3. 任何"phase 早退"必须配 <action>设置 current_phase_result = ABORT</action>
+       单独动作（详见 ADR-001）；O21 宏标签落地后将自动展开此约束（详见 ADR-021）。
+    4. 本注释块在 v4.2 PR-3（O21 宏标签）+ PR-6（D14 收口）合入后由 O21 宏标签
+       自动覆盖，本 PR 仅作为过渡期约束保留；PR-6 合入后可由 cleanup PR 移除。
+    ========================================================================
+    -->
     <workflow>
         <step n="1" goal="加载流程规范和上游产物">
             <load target="mobile-qa-workflow/core/core-rules.xml" prompt="重新加载作为流程规范"/>

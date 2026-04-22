@@ -31,11 +31,11 @@ description: >-
 | `user_inputs` | `{}` | step-pause 用户回复命名空间容器；编排器 step 4 解析回复后**总是**写入 `user_inputs.<result_field>` | v4.1 |
 | `non_bug_context` | `null` | 最近一次 P2 Non-Bug 判定上下文文本，供编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用；允许在后续会话中被覆盖，非长期业务字段 | v4.1（D17） |
 | `parse_error_count` | `0` | step-pause 连续解析失败熔断计数器；**生命周期**：进入新 step-pause 前清零、解析成功清零、解析失败 +1、累计 ≥ 3 切到 `current_state = Human-Review` 并清零 | v4.1（D18） |
-| `non_bug_user_choice` | `null` | step-pause 用户选择（`Accept` / `Reflow`）的**顶层镜像白名单字段**；编排器读取保持顶层 `{non_bug_user_choice}` 占位以兼容现有 switch | v4.1（顶层镜像，**v4.2 收敛到 `user_inputs.non_bug_user_choice`**） |
+<!-- v4.2 PR-6 / DOC-D1：顶层 non_bug_user_choice 镜像字段已下线，user_inputs.non_bug_user_choice 单写承接（详见 ADR-015 §6 v4.2 PR-6 修订段）。 -->
 
 > ❌ **不持久化 `current_phase_result`**（D1：运行时变量）。
 >
-> ⚠️ **顶层镜像字段白名单（v4.1 D8 + D15）**：v4.1 起步白名单 = `{ non_bug_user_choice }`，新增需 PR Review 显式批准并同步更新 `core/workflow-status-template.yaml` 注释；v4.2 整体收敛后将删除所有顶层镜像字段，编排器统一改读 `user_inputs.<key>`。
+> ✅ **`user_inputs` 单写（v4.2 PR-6 起 / D8 + D15 收口）**：所有 step-pause 用户回复**仅写入** `workflow_status.user_inputs.<result_field>`（单写）；顶层镜像字段全部下线。引用方统一用 `{user_inputs.<key>}` 形式（详见 ADR-008 v4.2 PR-6 修订段 + ADR-015 §6）。
 >
 > 🔁 **step-pause 输入协议（D2 + D16）**：所有 step-pause 标题最后一行必须形如 `请用 <key>=<value> 回复`；用户回复**首行**含 `<key>=<value>`，`<value>` ∈ `allowed_values` 白名单；解析失败编排器输出 `[parse-error: 期望 <key> ∈ <allowed_values>]` 并重新触发同一 step-pause；连续 3 次失败强制转 Human-Review。
 

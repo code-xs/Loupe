@@ -15,12 +15,13 @@ fail=0
 # 提取 system-prompt.md 中 <!-- ENUM-DECLARATION-BLOCK --> ... <!-- /ENUM-DECLARATION-BLOCK -->
 # 内的状态名集合，与 core/workflow-status-template.yaml 头部 enum 集做集合相等比对
 # ──────────────────────────────────────────────────────────
-# v4.2 PR-2 / SCRIPT-FIX1 改动 1：改用 python 严格抽取 v4.1 完整集合 enum 列表行
+# v4.2 PR-2 / SCRIPT-FIX1 改动 1：改用 python 严格抽取完整集合 enum 列表行
 # （仅识别 "#   X / Y / Z" 形式；剔除 awk 范围式 + 宽松 PascalCase 抓取的 PRESERVE/FORMAT/SKILL/PLATFORM-GUIDE/PR- 等噪音）
+# v4.2 PR-6 / SCRIPT-D2：兼容 v4.1 与 v4.2 锚点（TPL-D1 把锚点改为 v4.2 完整集合）
 ENUM_CORE=$(python3 - <<'PYEOF'
 import re
 content = open('core/workflow-status-template.yaml').read()
-m = re.search(r'v4\.1\s*完整集合[^\n]*\n((?:#\s+\S.*\n)+)', content)
+m = re.search(r'v4\.[12]\s*完整集合[^\n]*\n((?:#\s+\S.*\n)+)', content)
 if not m:
     print('__MISSING__')
     raise SystemExit(0)
@@ -41,9 +42,10 @@ content = open('system-prompt.md').read()
 m = re.search(r'<!-- ENUM-DECLARATION-BLOCK -->(.*?)<!-- /ENUM-DECLARATION-BLOCK -->', content, re.S)
 if not m:
     print('__MISSING__'); sys.exit(0)
-# 仅取 "v4.1 完整集合" 之后那一段，避免抓到说明文字里其它 PascalCase token
+# 仅取 "v4.x 完整集合" 之后那一段，避免抓到说明文字里其它 PascalCase token
+# v4.2 PR-6 / SCRIPT-D2：兼容 v4.1/v4.2 锚点
 body = m.group(1)
-m2 = re.search(r'v4\.1\s*完整集合[^\n]*\n(.*)', body, re.S)
+m2 = re.search(r'v4\.[12]\s*完整集合[^\n]*\n(.*)', body, re.S)
 text = m2.group(1) if m2 else body
 names = re.findall(r'\b([A-Z][A-Za-z-]+)\b', text)
 states = sorted(set(n for n in names if not any(c.isdigit() for c in n)))
@@ -62,44 +64,60 @@ elif [ "$ENUM_CORE" != "$ENUM_SP" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────
-# 校验 2：高风险 token 白名单（PR-1 阶段兜底，PR-2 全量声明块比对后可降为可选）
-# 2a) Spec-Uncertain allowed_values：当前 main 是 Confirm（v3 残留），PR-4 改为 1|2|S
-#     PR-1 阶段不强校验取值，但要求 system-prompt.md 与 core/workflow.xml 出现的取值"字面一致"
-# 2b) 关键 stop_state：Non-Bug / RCA-LowConfidence / Curation-Failed / Human-Review 必须在 system-prompt.md 中至少出现 1 次（基本完整性）
+# 校验 2a：step-pause-registry 三元组结构化同步校验（v4.2 PR-6 起 / v1.1 / Review Finding 4-B 收口 / SCRIPT-D2）
+# v4.2 PR-6 替换 ANCHOR-N1/N2 锚点扫描机制：从 core/step-pause-registry.yaml 抽取每项的
+#   state + result_field + allowed_values 三元组，并断言 system-prompt.md 中对应内容完整出现。
+# v1.0 方案仅 grep state 名（弱校验，存在 result_field/allowed_values 漂移时假绿风险）；
+# v1.1 升级为三元组对比，与 SP-N1 由 build-system-prompt.py 生成的 routing table（GEN-D2）形成对账。
 # ──────────────────────────────────────────────────────────
-# 2a) v4.2 PR-2 / SCRIPT-FIX1 改动 2：依赖 ANCHOR-N1/N2 稳定锚点定位（窗口式扫描）
-# 实现要点（与 check-build-system-prompt-precondition.sh 的 extract_after_anchor 对称）：
-#   · 缺锚点直接 fail（severity 决定 warning/error）
-#   · 锚点后窗口 25 行（覆盖 core/workflow.xml 的 step-pause 多行块；sp 段单行已足够）
-#   · regex 仅识别 ASCII enum 字符 [A-Za-z0-9|]，避免吞掉 sp 段后面的 `）→` 全角字符
-ANCHOR_LINE='<!-- ANCHOR: spec-uncertain-allowed-values -->'
-extract_after_anchor() {
-  local file="$1" window="${2:-25}"
-  if ! grep -qF "$ANCHOR_LINE" "$file"; then
-    echo "__MISSING_ANCHOR__"
-    return
-  fi
-  awk -v anchor="$ANCHOR_LINE" -v win="$window" '
-    index($0, anchor) {hit=NR; next}
-    hit && NR-hit <= win {print}
-  ' "$file" | grep -oE 'allowed_values="?[A-Za-z0-9|]+"?' | head -1 \
-    | sed -e 's/^allowed_values=//' -e 's/^"//' -e 's/"$//'
-}
-SU_CORE=$(extract_after_anchor core/workflow.xml)
-SU_SP=$(extract_after_anchor system-prompt.md)
-if [ "$SU_CORE" = "__MISSING_ANCHOR__" ] || [ "$SU_SP" = "__MISSING_ANCHOR__" ]; then
-  echo "::${SEVERITY}::Spec-Uncertain ANCHOR 缺失（core: '$SU_CORE' / sp: '$SU_SP'）— 见 ANCHOR-N1/N2"
-  [ "$SEVERITY" = "error" ] && fail=1
-elif [ -z "$SU_CORE" ] || [ -z "$SU_SP" ]; then
-  echo "::${SEVERITY}::Spec-Uncertain 锚点窗口内未提取到 allowed_values（core: '$SU_CORE' / sp: '$SU_SP'）"
-  [ "$SEVERITY" = "error" ] && fail=1
-fi
-# 注：core 与 sp 的 allowed_values 在 PR-2 阶段允许不同（core=Confirm / sp=1|2|S）；
-# 字面一致性的强约束由 check-build-system-prompt-precondition.sh（H1 守门）单独承担。
-# 本脚本只校验"两侧锚点窗口都能提取到 allowed_values"，不再做字面相等判定。
+python3 - "$SEVERITY" <<'PY' || fail=1
+import re, sys
+severity = sys.argv[1]
+reg = open('core/step-pause-registry.yaml', encoding='utf-8').read()
+sp = open('system-prompt.md', encoding='utf-8').read()
 
-# 2b)
-for state in "Non-Bug" "RCA-LowConfidence" "Curation-Failed" "Human-Review"; do
+# 抽取 registry 每项的 state + result_field + allowed_values
+# （兼容 state 行尾带 inline 注释如 "state: Spec-Uncertain # PR-3'"）
+items = re.findall(
+    r'^\s*-\s*state:\s*([A-Za-z][A-Za-z0-9-]*)\s*(?:#[^\n]*)?\n((?:.|\n)*?)(?=^\s*-\s*state:|\Z)',
+    reg, re.M
+)
+fail = 0
+for state, body in items:
+    rf_m = re.search(r'\bresult_field:\s*([^\n#]+)', body)
+    av_m = re.search(r'\ballowed_values:\s*\[([^\]]+)\]', body)
+    is_route = bool(re.search(r'\bkind:\s*route', body))
+    rf = rf_m.group(1).strip() if rf_m else None
+    av = av_m.group(1).strip() if av_m else None
+
+    # 校验 1：state 名出现
+    if state not in sp:
+        print(f"::{severity}::sync-2a-state-missing / system-prompt.md 缺 registry state 引用: {state}")
+        fail = 1
+        continue
+
+    if is_route:
+        continue  # route 项无 result_field/allowed_values，跳过 2/3 校验
+
+    # 校验 2：result_field 出现
+    if rf and rf not in sp:
+        print(f"::{severity}::sync-2a-result_field-missing / state={state} 的 result_field='{rf}' 未在 system-prompt.md 中出现（registry 三元组漂移）")
+        fail = 1
+
+    # 校验 3：allowed_values 字面出现（兼容 ["1","2","S"] / [Continue, Revise] 等多种格式）
+    if av:
+        tokens = [t.strip().strip('"').strip("'") for t in av.split(',')]
+        for tok in tokens:
+            if tok and tok not in sp:
+                print(f"::{severity}::sync-2a-allowed_values-missing / state={state} 的 allowed_values token '{tok}' 未在 system-prompt.md 中出现")
+                fail = 1
+sys.exit(fail)
+PY
+
+# ──────────────────────────────────────────────────────────
+# 校验 2b：关键 stop_state 必须出现 ≥ 1 次（v4.2 PR-6 起加入 Fix-Confirming）
+# ──────────────────────────────────────────────────────────
+for state in "Non-Bug" "RCA-LowConfidence" "Curation-Failed" "Human-Review" "Fix-Confirming"; do
   if ! grep -q "$state" system-prompt.md; then
     echo "::${SEVERITY}::system-prompt.md 缺关键 stop_state 引用: $state"
     [ "$SEVERITY" = "error" ] && fail=1

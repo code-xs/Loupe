@@ -68,40 +68,16 @@ done
 #   ② form=inline：  含 title + result_field + allowed_values 三必填且不含 registry-key
 #   ③ mutex 违规  ：同时含或同时缺 → error
 # 范围：core/workflow.xml + phases/p[1-6]-*.md
-# 豁免：legacy-phase-step-pause-allowlist.txt 内条目（±5 行漂移）—— v4.2 遗留 #6
-#       PR-6 一并清理；与 D14 (Check 2) / D16 (Check 1) 同口径，避免本 PR 越界拨 phase。
+# 豁免：v4.2 PR-6 起 D19 allowlist 已物理删除（FILE-D1），无任何豁免；
+#       mutex 段保留作为 inline 形态回潮兜底防线（与 SCRIPT-D6 single-form 强守门互补）。
 # 注释 mention 排除：与 D14/D16 同款，仅匹配 ^\s*<step-pause（行首属硬标签起始）。
 # ════════════════════════════════════════════════════════════════════════════
-ALLOWLIST="scripts/legacy-phase-step-pause-allowlist.txt"
 mutex_check_file() {
   local f="$1"
   [ -f "$f" ] || return 0
-  python3 - "$f" "$ALLOWLIST" <<'PY' || return 1
-import re, sys, os
+  python3 - "$f" <<'PY' || return 1
+import re, sys
 target = sys.argv[1]
-allowlist_path = sys.argv[2]
-
-# 加载 allowlist：(repo_relative_path, expected_line) 元组列表
-legacy_entries = []
-if os.path.isfile(allowlist_path):
-    for raw in open(allowlist_path, encoding='utf-8'):
-        s = raw.strip()
-        if not s or s.startswith('#'):
-            continue
-        parts = s.split(':')
-        if len(parts) >= 2:
-            try:
-                legacy_entries.append((parts[0], int(parts[1])))
-            except ValueError:
-                pass
-
-# 把 cwd 内相对路径（如 phases/p2-*.md）映射成 allowlist 中的 repo 相对路径
-# （allowlist 用 mobile-qa-workflow/ 前缀；本脚本 cwd = mobile-qa-workflow/）
-def to_repo_path(local_path):
-    if local_path.startswith("mobile-qa-workflow/"):
-        return local_path
-    return "mobile-qa-workflow/" + local_path
-repo_path = to_repo_path(target)
 
 src_lines = open(target, encoding='utf-8').read().splitlines(keepends=False)
 src = '\n'.join(src_lines)
@@ -109,7 +85,6 @@ src = '\n'.join(src_lines)
 # 抓"行首 <step-pause"开始，跨行直到首个未被引号包裹的 '>'（即整个开标签）
 fail = 0
 n_checked = 0
-n_skipped_legacy = 0
 n_skipped_comment = 0
 i = 0
 while i < len(src_lines):
@@ -146,16 +121,9 @@ while i < len(src_lines):
         i = j + 1
         continue
 
-    # 2) allowlist 豁免（v4.2 遗留 #6 / 与 D14/D16 同口径 / ±5 行漂移）
-    is_legacy = False
-    for ep, el in legacy_entries:
-        if ep == repo_path and abs(start_line - el) <= 5:
-            is_legacy = True
-            break
-    if is_legacy:
-        n_skipped_legacy += 1
-        i = j + 1
-        continue
+    # 2) v4.2 PR-6 起 allowlist 豁免已下线（FILE-D1 物理删除 / SCRIPT-D1 v1.1 / Fix-3）
+    #    inline 形态零容忍由 SCRIPT-D6 (Check 17 / error) 单形态强守门承担；
+    #    本 mutex 段降为"两形态互斥"兜底防线，防 inline 形态意外回潮。
 
     # 3) 形态判定
     has_reg   = bool(re.search(r'\bregistry-key\s*=', attrs))
@@ -175,7 +143,7 @@ while i < len(src_lines):
 
     i = j + 1
 
-print(f"[mutex] {target}: checked={n_checked}, skipped_legacy={n_skipped_legacy}, skipped_comment={n_skipped_comment}", file=sys.stderr)
+print(f"[mutex] {target}: checked={n_checked}, skipped_comment={n_skipped_comment}", file=sys.stderr)
 sys.exit(fail)
 PY
 }

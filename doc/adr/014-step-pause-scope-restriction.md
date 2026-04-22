@@ -54,3 +54,27 @@ phase 内 `<step-pause>` 跨回合恢复协议缺口：编排器 `core/workflow.
 - ADR-021（phase-abort 宏 / 同 PR Seg-1）
 - v4.2 PR-3' 主控文档 §2.5 / §2.6 / §2.7（CONTRACT-D1 / SP-N1 / CONTRACT-D3 完整字面）
 - v1.1 优化方案 §3.2.13a（O13a）
+
+## 7. v4.2 PR-6 收口纪要 — D14 整改清零（O13 + O14 / 2026-04-22）
+
+**收口动作**：
+1. 删除 `phases/p2-spec-definition.md` Spec-Uncertain 内联 step-pause（O13 / PHASE-D1）；
+2. 删除 `phases/p4-fix-design.md` Fix Design Confirm 内联 step-pause（O14 / PHASE-D2）；
+3. `step-pause-registry.yaml` 新增 `Fix-Confirming` 注册表项（REG-N1）；
+4. `workflow-status-template.yaml` enum 集新增 `Fix-Confirming`（TPL-D1）；
+5. `legacy-phase-step-pause-allowlist.txt` 物理删除（FILE-D1 / ADR-019 同步 superseded）；
+6. CI Check 1 / Check 2 / Check 3 / Check 4 / Check 6 / Check 13 全部下线（依赖对象已不存在 / CI-D1）；
+7. CI Check 15（`check-phase-abort-structure.sh`）严重度由 warning 升级 error（SCRIPT-D3）；
+8. CI 新增 Check 17（`check-step-pause-form.sh` / single-form 强守门 / error / SCRIPT-D6）。
+
+**收口后契约**：
+- phase 文件（`phases/**`、`functionality-deep-dive/phases/**`）**严禁**任何 `<step-pause>` 内联（无例外清单）；
+- phase 早退用 `<phase-abort>` 宏（ADR-021）；phase 正常完成可选用 `<phase-complete>` 宏；
+- 编排器 step 4c 命中 `step-pause-registry.yaml` 后渲染 step-pause（registry 形态唯一）；
+- CI single-form 校验由 `check-step-pause-form.sh`（Check 17 / error）强制；mutex 兜底防线由 `check-io-contract.sh`（Check 11 / warning）保留作为 inline 形态回潮防线。
+
+**关联**：
+- ADR-019（superseded / allowlist 物理删除）
+- ADR-016 v4.2 修订段（PR-6 第二次更新：删除 inline 形态过渡声明）
+- ADR-021（宏标签全 phase 应用 / `phase-abort` 新增 `update_config` 能力点）
+- ADR-010 §6 PR-5 落地纪要 + §7 PR-6 收口纪要（registry 含 Fix-Confirming）

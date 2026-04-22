@@ -33,7 +33,7 @@ import re, sys
 src = open(sys.argv[1], encoding='utf-8').read().splitlines()
 collect, block = False, []
 for ln in src:
-    if not collect and 'v4.1 完整集合' in ln:
+    if not collect and ('v4.1 完整集合' in ln or 'v4.2 完整集合' in ln):
         collect = True
         continue
     if collect:
@@ -66,8 +66,8 @@ m = re.search(r'<step\s+n=\"4a\".*?</step>\s*<step\s+n=\"4b\".*?</step>\s*<step\
 sys.exit(0 if m else 1)
 " || emit_error "$XML 内未发现 step 4a/4b/4c 三段拆分（O10+ Stage-2 未落地）"
 
-# v1.1：6 交互态 + 1 路由态 Boundary-Refined（Patch A）
-EXPECTED="Info-Insufficient Spec-Uncertain Non-Bug RCA-LowConfidence Curation-Failed Human-Review Boundary-Refined"
+# v4.2 PR-6：6 个交互态 + Fix-Confirming + 1 个路由态 Boundary-Refined
+EXPECTED="Info-Insufficient Spec-Uncertain Non-Bug RCA-LowConfidence Curation-Failed Human-Review Fix-Confirming Boundary-Refined"
 EXP_SORTED=$(echo "$EXPECTED" | tr ' ' '\n' | sort -u)
 REG_SORTED=$(echo "$REG_STATES" | tr ' ' '\n' | sort -u)
 MISSING=$(comm -23 <(echo "$EXP_SORTED") <(echo "$REG_SORTED") || true)

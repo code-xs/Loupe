@@ -131,14 +131,20 @@
         <step n="6" goal="回归测试设计与输出">
             <action>基于 Spec 和修改范围设计 TC1（直接验证）/ TC2（边界验证）/ TC3（回归验证）/ TC4（跨平台验证）/ TC5（专项附录验证，按需）。</action>
             <template-output file="{output_file}" template="mobile-qa-workflow/templates/fix-design.md"/>
-            <action>更新 {config_source}：output_fix_design = {output_file}</action>
-            <step-pause title="Fix Design 四重论证完成，请确认是否进入修复实施：
-">
-                <option title="[C] Continue：论证通过，进入 Phase 5 修复实施
-" action="更新 {workflow_status}：current_state = Fix-Implementing, reroute_reason = null, reroute_target_phase = null"/>
-                <option title="[R] Revise：修改方案后重新论证
-" action="goto step 2"/>
-            </step-pause>
+            <action>生成 Fix Design 简要摘要文本（≤ 200 字，覆盖：根因覆盖度 / 副作用风险 / 变更最小性 / 可回滚性
+                    四个维度的 1 句话总结），**将该段文本命名为本轮局部变量 `{fix_design_summary}`**（非
+                    workflow_status 顶层字段；下方通过 `<phase-abort>` 的 `fields` 写入 `workflow_status.user_inputs.fix_design_summary`，
+                    供 Fix-Confirming 弹窗标题占位 `{user_inputs.fix_design_summary}` 使用）</action>
+            <!-- v4.2 PR-6 / O14 / ADR-014 §7：D14 整改清零 — 删除内联 step-pause；
+                 改为 ABORT-with-confirm-gate 模式：phase-abort 退出 → 编排器 step 4c 命中
+                 step-pause-registry.yaml `state: Fix-Confirming` 项发起 step-pause；
+                 用户 Continue → set_state=Fix-Implementing；用户 Revise → set_state=Fix-Designing + fix_retry_count+1。
+                 Revise 路径不污染 stepsCompleted（v1.1 / Finding 2 收口）。
+                 update_config 与 phase-complete 同义（v1.1 / RULES-D4 新增）。 -->
+            <phase-abort state="Fix-Confirming"
+                         fields='{"user_inputs": {"fix_design_summary": "{fix_design_summary}"}}'
+                         update_config='{"output_fix_design": "{output_file}"}'
+                         reason="ADR-014（待用户 Continue/Revise 确认）"/>
         </step>
     </workflow>
     ```

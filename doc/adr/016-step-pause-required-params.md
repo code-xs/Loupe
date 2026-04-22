@@ -58,3 +58,34 @@
 （同时含或同时缺）由 `scripts/check-io-contract.sh` 互斥校验段（CI-D1）兜底
 为 error；③ `inline` 形态的 5 步咒语 / 输入契约（`[result_field=...]` 强结构）
 完全延续 ADR-016 主体；`registry` 形态展开后等价 `inline`，输出契约相同。
+
+---
+
+## v4.2 修订段 #2（PR-6 收口 / 2026-04-22 / 关联 ADR-014 §7 收口纪要）
+
+**变化背景**：PR-6 完成 D14 整改清零（O13 + O14）后，phase 内联 `<step-pause>` 已 100% 删除，
+inline 形态失去存在场景。`core/core-rules.xml` `<tag name="step-pause"><forms>` 块已删除
+inline `<form>` 定义，仅保留 registry 形态。
+
+**两形态契约（v4.2 PR-6 收口形态）**：
+
+| 形态 | 必填参数 | 禁出参数 | 适用范围 |
+|---|---|---|---|
+| ~~`inline`~~ | ~~`title` + `result_field` + `allowed_values`~~ | ~~`registry-key`~~ | **v4.2 PR-6 起退役** |
+| `registry` | `registry-key` | `title` + `result_field` + `allowed_values` + `option` | 编排器 4c（唯一合法形态） |
+
+**inline 形态字段定义保留作用**：原 ADR-016 主体的 `<step-pause>` 必填参数表保留作为
+"registry 项渲染时遵守的等价输出契约"——LLM 把 `registry-key` 展开为等价 inline 形态后，
+按 `input-protocol` rule n=1 输出强结构 `[result_field=...][allowed_values=...]` + 末尾行
+"请用 <key>=<value> 回复"。
+
+**强约束**：
+1. 所有 `<step-pause>` 必须含 `registry-key` 且不含 `title` / `result_field` / `allowed_values` / `option`；
+2. single-form 强守门由 `scripts/check-step-pause-form.sh`（Check 17 / error / SCRIPT-D6）承担；
+3. mutex 兜底防线（防 inline 形态意外回潮）由 `scripts/check-io-contract.sh` mutex 段（Check 11 / warning）保留；
+4. inline 形态相关参数定义在 `core-rules.xml` 中保留，但 `required` 属性已从 `form:inline` 改为 `false`（参考性保留 / 等价输出契约描述）。
+
+**关联**：
+- ADR-014 §7 v4.2 PR-6 收口纪要
+- ADR-019 v4.2 PR-6 退役纪要（superseded-by-v4.2-PR-6）
+- ADR-021 `phase-abort` / `phase-complete` 宏（含 `update_config` 能力点）

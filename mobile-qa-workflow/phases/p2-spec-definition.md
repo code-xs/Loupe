@@ -46,20 +46,15 @@
         <step n="4" goal="Spec 校准与非 Bug 判定">
             <action>确定 Spec 来源优先级：PRD(1) > 设计稿(2) > 竞品(3) > 用户口述(4)</action>
             <check if="Spec 存在模糊性或来源冲突">
-                <action>标记 [Spec-Uncertain]，列出多种可能的 Expected Behavior</action>
-                <!-- ⚠️ v4.2 遗留 #6：本内联 <step-pause> 与编排器 step 4 case Spec-Uncertain
-                     重复弹窗（已知 bug）；按 D14 收窄声明，v4.1 暂不动以避免 scope creep，
-                     v4.2 整体迁出 phase 文件，由编排器统一调度。 -->
-                <step-pause title="Spec 存在歧义，请确认 Expected Behavior：
-{spec_options}
-">
-                    <option title="[1] {option_1}
-"/>
-                    <option title="[2] {option_2}
-"/>
-                    <option title="[S] Skip：先并行分析所有可能，后续确认
-" action="确认前对每种可能 Spec 分别分析"/>
-                </step-pause>
+                <action>标记 [Spec-Uncertain]，列出多种可能的 Expected Behavior，
+                        将候选选项数组命名为 `{spec_options}`，并同时生成 `{option_1}` / `{option_2}` 两段文本（供弹窗选项标题占位使用）。
+                        为避免把临时渲染字段写入 workflow_status 顶层 schema（Check 15 顶层字段断言），
+                        本分支把三段值写入 workflow_status.user_inputs.* 命名空间（与 D15 单写协议一致）。</action>
+                <!-- v4.2 PR-6 / O13 / ADR-014 §7：D14 整改清零 — 删除内联 step-pause；
+                     由编排器 step 4c 命中 step-pause-registry.yaml `state: Spec-Uncertain` 项统一发起 step-pause。 -->
+                <phase-abort state="Spec-Uncertain"
+                             fields='{"user_inputs": {"spec_options": "{spec_options}", "option_1": "{option_1}", "option_2": "{option_2}"}}'
+                             reason="ADR-014"/>
             </check>
             <action>逐项检查 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
 

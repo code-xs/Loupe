@@ -15,214 +15,16 @@ on:
 
 jobs:
   schema-check:
-    name: 8-item schema/protocol guard (D14/D15/D16/D18/D19/M16)
+    name: schema/protocol guard (D14/D15/D18/M16 / v4.2 PR-6 收口)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 1：D16 step-pause 完整参数
-      # 主文档锚点：§3 PR-8 评审重点 #1 / §5.1 第 9 项
-      # 范围：
-      #   · 用 ^\s*<step-pause 严格匹配，自动排除注释 mention（PR-3 / PR-5+6 §5.A.5 同款基调）
-      #   · 在 allowlist (D19) 内的 phase legacy step-pause 享受 v4.2 过渡豁免（D14/D19 设计），
-      #     仅由检查 2 守门"位置 + semantic-id 匹配"，参数完整性留待 v4.2 遗留 #6 整改一并修
-      #   · 其余命中（编排器 step 4 内 6 处 + 任何不在 allowlist 的新增）必须 D16 三属性完整
+      # v4.2 PR-6 / CI-D1：Check 1/2/3/4/6/13 整段下线（依赖 allowlist 与 ANCHOR-N1/N2 已物理删除）
+      # 详见 construction-plans/v4.2/pr-6-d14-inline-removal-and-system-prompt-rebuild-v1.1.md §2.15
       # ════════════════════════════════════════════════════════════════
-      - name: Check 1 — D16 step-pause 完整参数 (title/result_field/allowed_values)
-        run: |
-          set -euo pipefail
-          ALLOWLIST=mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
-          fail=0
-          checked=0
-          skipped_legacy=0
-          # 把 allowlist 加载到 LEGACY 数组（path|expected_line|semantic-id；空行/注释剔除）
-          # 兼容 bash 3.x（macOS 默认）/ bash 5.x（CI）：不用 mapfile
-          LEGACY=()
-          while IFS= read -r line; do LEGACY+=("$line"); done \
-            < <(grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST")
-          while IFS=: read -r f ln _; do
-            f_norm=$(echo "$f" | sed 's://*:/:g')
-            is_legacy=0
-            for entry in "${LEGACY[@]}"; do
-              ep=$(echo "$entry" | cut -d: -f1)
-              el=$(echo "$entry" | cut -d: -f2)
-              if [ "$f_norm" = "$ep" ] && [ "$ln" -ge $((el-5)) ] && [ "$ln" -le $((el+5)) ]; then
-                is_legacy=1
-                break
-              fi
-            done
-            if [ $is_legacy -eq 1 ]; then
-              skipped_legacy=$((skipped_legacy+1))
-              continue
-            fi
-            checked=$((checked+1))
-            block=$(awk -v start="$ln" 'NR>=start && NR<=start+6' "$f")
-            for attr in title result_field allowed_values; do
-              if ! printf '%s\n' "$block" | grep -q "${attr}="; then
-                echo "[D16-FAIL] $f:$ln missing attribute: ${attr}"
-                fail=1
-              fi
-            done
-          done < <(grep -rnE '^[[:space:]]*<step-pause' \
-                        mobile-qa-workflow/core/workflow.xml \
-                        mobile-qa-workflow/phases/ \
-                        mobile-qa-workflow/functionality-deep-dive/phases/ 2>/dev/null || true)
-          if [ $fail -eq 0 ]; then
-            echo "[D16-OK] ${checked} <step-pause> checked (all 3 attrs present), ${skipped_legacy} skipped (allowlist legacy / v4.2 遗留 #6)"
-          fi
-          exit $fail
-
-      # ════════════════════════════════════════════════════════════════
-      # 检查 2：D14 调度作用域 + D19 allowlist
-      # 主文档锚点：§3 PR-8 评审重点 #2 / §5.1 第 10 项
-      # 算法（按 D19 文件头协议 "条目格式：<path>:<line>:<semantic-id>，line 容许 ±5 行漂移；
-      #       CI 仅校验文件路径与 semantic-id"）：
-      #   1) 加载 allowlist 非注释/非空条目 → (path, expected_line, semantic-id) 三元组
-      #   2) phases/** 下每个 ^\s*<step-pause 命中 (path, line) 必须能匹配某个 allowlist 条目，
-      #      条件：path 一致 + |line - expected_line| ≤ 5
-      #   3) 任何未被任何 allowlist 条目消费的 phase 内 step-pause 命中 → D14 违规
-      #   4) （额外）任何无对应源码命中的 allowlist 条目 → D19 漂移（建议同步删除/更新）
-      # ════════════════════════════════════════════════════════════════
-      - name: Check 2 — D14 调度作用域 + D19 allowlist 双向匹配
-        run: |
-          set -euo pipefail
-          ALLOWLIST=mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
-          fail=0
-          # 兼容 bash 3.x / 5.x：不用 mapfile
-          LEGACY=()
-          while IFS= read -r line; do LEGACY+=("$line"); done \
-            < <(grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST")
-          # allowlist 条目消费记录（用 index）
-          declare -a CONSUMED
-          for i in "${!LEGACY[@]}"; do CONSUMED[$i]=0; done
-
-          n_hits=0
-          while IFS=: read -r f ln _; do
-            f_norm=$(echo "$f" | sed 's://*:/:g')
-            n_hits=$((n_hits+1))
-            matched=0
-            for i in "${!LEGACY[@]}"; do
-              ep=$(echo "${LEGACY[$i]}" | cut -d: -f1)
-              el=$(echo "${LEGACY[$i]}" | cut -d: -f2)
-              if [ "$f_norm" = "$ep" ] && [ "$ln" -ge $((el-5)) ] && [ "$ln" -le $((el+5)) ]; then
-                CONSUMED[$i]=1
-                matched=1
-                break
-              fi
-            done
-            if [ $matched -eq 0 ]; then
-              echo "[D14-FAIL] $f_norm:$ln phase-internal <step-pause> not in allowlist (within ±5 lines)"
-              fail=1
-            fi
-          done < <(grep -rnE '^[[:space:]]*<step-pause' \
-                        mobile-qa-workflow/phases/ \
-                        mobile-qa-workflow/functionality-deep-dive/phases/ 2>/dev/null || true)
-
-          # 反向：未被消费的 allowlist 条目
-          for i in "${!LEGACY[@]}"; do
-            if [ "${CONSUMED[$i]}" -eq 0 ]; then
-              echo "[D19-DRIFT] allowlist entry has no matching source hit (within ±5 lines): ${LEGACY[$i]}"
-              fail=1
-            fi
-          done
-
-          if [ $fail -eq 0 ]; then
-            echo "[D14-OK] all ${n_hits} phase-internal <step-pause> hits matched allowlist entries; allowlist 0 drift"
-          fi
-          exit $fail
-
-      # ════════════════════════════════════════════════════════════════
-      # 检查 3：D15 顶层白名单守门
-      # 主文档锚点：§3 PR-8 评审重点 #3 / §5.1 第 12 项
-      # 3a：core/workflow.xml 中所有 {<state-field>} 形式的顶层引用必须在
-      #     workflow-status-template.yaml 注册（用 EXEMPT 列豁免编排器局部上下文占位符）
-      # 3b：所有 <step-pause result_field="X">，X 不在白名单时不允许 X 在 status-template 顶层
-      # ════════════════════════════════════════════════════════════════
-      - name: Check 3 — D15 顶层白名单守门 (top-level refs + result_field mirror)
-        run: |
-          set -euo pipefail
-          TPL=mobile-qa-workflow/core/workflow-status-template.yaml
-          WF=mobile-qa-workflow/core/workflow.xml
-          fail=0
-
-          # 3a：扫描 workflow.xml 中明确状态字段引用 {non_bug_context} / {xxx_user_choice}
-          while IFS=: read -r f ln line; do
-            key=$(printf '%s\n' "$line" \
-                  | grep -oE '\{(non_bug_context|[a-z_]+_user_choice)\}' \
-                  | head -1 \
-                  | tr -d '{}' || true)
-            [ -z "$key" ] && continue
-            if ! grep -qE "^${key}:" "$TPL"; then
-              echo "[D15-FAIL] $f:$ln top-level ref to unregistered key: {$key}"
-              fail=1
-            fi
-          done < <(grep -nE '\{(non_bug_context|[a-z_]+_user_choice)\}' "$WF" 2>/dev/null || true)
-
-          # 3b：抽取顶层镜像白名单（锚点 = "^# ⚠️ 顶层镜像字段白名单"，避免 mention 误触发）
-          WHITELIST=$(awk '
-              /^#[[:space:]]*⚠️[[:space:]]*顶层镜像字段白名单/ {in_block=1; next}
-              /^specialized_workflow:/ {in_block=0}
-              in_block && /^[a-z_][a-z0-9_]*:/ {sub(":.*",""); print}
-          ' "$TPL")
-
-          # 收集所有 result_field
-          RFS=$(grep -hoE 'result_field="[a-z_][a-z0-9_]*"' \
-                  "$WF" \
-                  mobile-qa-workflow/phases/*.md \
-                  mobile-qa-workflow/functionality-deep-dive/phases/*.md 2>/dev/null \
-                | sed -E 's/result_field="([a-z_][a-z0-9_]*)"/\1/' \
-                | sort -u || true)
-
-          for rf in $RFS; do
-            in_wl=0
-            while IFS= read -r w; do
-              [ "$rf" = "$w" ] && in_wl=1 && break
-            done <<< "$WHITELIST"
-            if [ $in_wl -eq 0 ]; then
-              # 不在白名单内的 result_field 不允许在 status-template 顶层有镜像字段定义
-              if grep -qE "^${rf}:" "$TPL"; then
-                echo "[D15-FAIL] result_field '${rf}' not in mirror whitelist but defined as top-level in status-template"
-                fail=1
-              fi
-            fi
-          done
-
-          if [ $fail -eq 0 ]; then
-            n_rf=$(printf '%s\n' "$RFS" | grep -cv '^$' || echo 0)
-            n_wl=$(printf '%s\n' "$WHITELIST" | grep -cv '^$' || echo 0)
-            echo "[D15-OK] ${n_rf} result_fields scanned, ${n_wl} top-level mirror whitelist entries, no leakage"
-          fi
-          exit $fail
-
-      # ════════════════════════════════════════════════════════════════
-      # 检查 4：顶层镜像字段过渡注释（v4.1 → v4.2 收敛标注）
-      # 主文档锚点：§3 PR-8 评审重点 #4 / §5.1 第 14 项
-      # ════════════════════════════════════════════════════════════════
-      - name: Check 4 — 顶层镜像字段过渡标注 (v4.2 收敛 / 遗留 #3)
-        run: |
-          set -euo pipefail
-          TPL=mobile-qa-workflow/core/workflow-status-template.yaml
-          fail=0
-          # 起步白名单仅 non_bug_user_choice；未来扩展时本表需同步
-          for field in non_bug_user_choice; do
-            ln=$(grep -nE "^${field}:" "$TPL" | head -1 | cut -d: -f1)
-            if [ -z "$ln" ]; then
-              echo "[Migration-Note-FAIL] field '${field}' not found in $TPL"
-              fail=1
-              continue
-            fi
-            if ! awk -v line="$ln" 'NR>=line-8 && NR<=line+1' "$TPL" \
-                 | grep -qE 'v4\.2.*(收敛|遗留[[:space:]]*#3)'; then
-              echo "[Migration-Note-FAIL] ${field} (line $ln) missing 'v4.2 收敛/遗留 #3' transitional note"
-              fail=1
-            fi
-          done
-          if [ $fail -eq 0 ]; then
-            echo "[Migration-Note-OK] all top-level mirror fields carry v4.2 transitional note"
-          fi
-          exit $fail
 
       # ════════════════════════════════════════════════════════════════
       # 检查 5：迁移脚本存在性 (D13)
@@ -237,37 +39,6 @@ jobs:
             exit 1
           fi
           echo "[D13-OK] migrate script present"
-
-      # ════════════════════════════════════════════════════════════════
-      # 检查 6：D19 allowlist 存在 / 非空 / 格式合规 / 计数固化 == 2
-      # 主文档锚点：§3 PR-8 评审重点 #6 / §5.1 第 16 项
-      # ════════════════════════════════════════════════════════════════
-      - name: Check 6 — D19 allowlist 存在/非空/格式 (固化计数 == 2)
-        run: |
-          set -euo pipefail
-          ALLOWLIST=mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt
-          if [ ! -s "$ALLOWLIST" ]; then
-            echo "[D19-FAIL] allowlist missing or empty: $ALLOWLIST"
-            exit 1
-          fi
-          n=$(grep -cvE '^[[:space:]]*(#|$)' "$ALLOWLIST" || true)
-          if [ "$n" -ne 2 ]; then
-            echo "[D19-DRIFT] allowlist non-comment lines = $n, expected 2 (PR-5 现状盘点)"
-            exit 1
-          fi
-          if grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST" \
-             | grep -vqE '^[^:]+:[0-9]+:[a-z0-9-]+$'; then
-            echo "[D19-FORMAT-OK] format check pre-pass"
-          fi
-          if grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST" \
-             | grep -vE '^[^:]+:[0-9]+:[a-z0-9-]+$' \
-             | grep -q .; then
-            echo "[D19-FORMAT] allowlist contains malformed entries (not path:line:semantic-id)"
-            grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST" \
-              | grep -vE '^[^:]+:[0-9]+:[a-z0-9-]+$' >&2
-            exit 1
-          fi
-          echo "[D19-OK] allowlist present, non-comment lines = ${n}, format compliant"
 
       # ════════════════════════════════════════════════════════════════
       # 检查 7：M16 config-schema 键漂移
@@ -322,13 +93,12 @@ jobs:
         run: bash mobile-qa-workflow/scripts/check-system-prompt-sync.sh
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 11（v4.2 PR-2 维持 warning）：io-contract 守门
-      # v1.1 review Major 1 修订：当前脚本变量化兜底过宽，假绿守门价值不足，
-      # 推迟到后续算法增强 PR；本 PR 不动 severity，保持 PR-1 v1.1 配置。
+      # 检查 11（v4.2 PR-6 v1.1 / Review Finding 4-A 收口：维持 warning）：io-contract 守门
+      # 维持 warning 理由：basename 算法的变量化兜底过宽，假绿守门价值不足；
+      # single-form 强守门由 Check 17（SCRIPT-D6）独立 error 承担，二者解耦避免假闭环。
+      # 本脚本 v4.2 PR-6 / SCRIPT-D1 已删除 allowlist 豁免；mutex 段保留作为 inline 形态回潮兜底。
       # ════════════════════════════════════════════════════════════════
       - name: Check 11 — io-contract 守门
-        env:
-          IO_CONTRACT_SEVERITY: warning  # v4.2 PR-2 不升级；待后续 PR 算法增强后再改 error
         run: bash mobile-qa-workflow/scripts/check-io-contract.sh
 
       # ════════════════════════════════════════════════════════════════
@@ -338,11 +108,12 @@ jobs:
         run: bash mobile-qa-workflow/scripts/check-subagent-params.sh
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 13（v4.2 PR-2 启用 error）：build-system-prompt precondition 守门 / V1.1 §4.1.0 H1
-      # 实现：锚点提取式（ANCHOR-N1/N2 联动），缺锚点直接 error
+      # v4.2 PR-6 / CI-D1 + SCRIPT-D5：Check 13 整段下线，配套
+      #   git rm mobile-qa-workflow/scripts/check-build-system-prompt-precondition.sh
+      # H1 守门完成历史使命（PR-6 SP-N1 已首次自动构建 system-prompt.md）。
+      # 替代守门：Check 9 (state-enum) + Check 10 (sync 三元组) + Check 15 (phase-abort/complete)
+      #          + Check 16 (registry 双向) + Check 17 (single-form) 五件套联防。
       # ════════════════════════════════════════════════════════════════
-      - name: Check 13 — build-system-prompt precondition 守门
-        run: bash mobile-qa-workflow/scripts/check-build-system-prompt-precondition.sh
 
       # ════════════════════════════════════════════════════════════════
       # 检查 14（v4.2 PR-2 启用）：build-system-prompt 单测 + P3 反查回放用例
@@ -356,17 +127,15 @@ jobs:
           python -m unittest discover -s mobile-qa-workflow/scripts/tests/ -v
 
       # ════════════════════════════════════════════════════════════════
-      # 检查 15（v4.2 PR-3' 启用 warning）：phase-abort / phase-complete 宏结构守门
+      # 检查 15（v4.2 PR-6 升级 error）：phase-abort / phase-complete 宏结构守门
       # 范围：主链路 phases/*.md（6 个 phase）；功能 deep-dive 不在本 PR 治理范围。
       # 守门：① state ∈ 权威 enum 集（占位字面 "{...}" 跳过）
-      #       ② fields key ∈ workflow-status-template.yaml 顶层字段表
-      #       ③ phase 文件含宏 ≥ 1（P4 输出 notice，PR-6 内联 step-pause 删除后改写）
-      # 切档：PR-6 合入 D14 收口后由 PHASE_ABORT_SEVERITY=error 升级
+      #       ② fields top-level key ∈ workflow-status-template.yaml 顶层字段表
+      #       ③ phase 文件含宏 ≥ 1（PR-6 SCRIPT-D3 删除 P4 notice 特例）
+      # 严重度：PR-6 起 PHASE_ABORT_SEVERITY 默认 error（脚本内置 / 见 SCRIPT-D3）
       # 关联：V1.1 §3.2.22 / 主文档 §2.9 / ADR-021
       # ════════════════════════════════════════════════════════════════
       - name: Check 15 — phase-abort/complete 宏结构守门
-        env:
-          PHASE_ABORT_SEVERITY: warning  # PR-3' 起步 warning，PR-6 升级 error
         run: bash mobile-qa-workflow/scripts/check-phase-abort-structure.sh
 
       # ════════════════════════════════════════════════════════════════
@@ -381,3 +150,14 @@ jobs:
       # ════════════════════════════════════════════════════════════════
       - name: Check 16 — step-pause-registry 守门 (v4.2 PR-5 / O10+ / O22 / H3)
         run: bash mobile-qa-workflow/scripts/check-step-pause-registry.sh
+
+      # ════════════════════════════════════════════════════════════════
+      # 检查 17（v4.2 PR-6 v1.1 新增 / Review Finding 4-A 收口）：step-pause single-form 守门
+      # 守门：v4.2 PR-6 起 <step-pause> 唯一合法形态 = registry-only
+      #       （含 registry-key 且不含 title / result_field / allowed_values / option）
+      # 与 Check 11 (io-contract) 解耦：本 Check 是 single-form 强守门 (error)，
+      # Check 11 是 io-contract basename 弱守门 (warning) + mutex 兜底防线
+      # 关联：SCRIPT-D6 / ADR-016 v4.2 修订段 #2 / RULES-D3
+      # ════════════════════════════════════════════════════════════════
+      - name: Check 17 — step-pause single-form 守门
+        run: bash mobile-qa-workflow/scripts/check-step-pause-form.sh

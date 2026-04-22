@@ -15,18 +15,18 @@
 | [ADR-005](./005-pr-tier-tagging.md) | PR 层级标签（🟢 / 🟡 / 🔴） | active | D5 | v4.1 PR-1（已合入） |
 | [ADR-006](./006-deep-dive-keyname-deferral.md) | Deep-Dive 键名映射延后 | active | D6 | v4.1 不动，v4.3 评估 |
 | [ADR-007](./007-fanout-mode-no-rename.md) | 保留 `fanout_mode` 不重命名 + 新增 `fix_fanout_mode` | active | D7 | v4.1 PR-1（已合入）+ v4.2 PR-2 修订 |
-| [ADR-008](./008-step-pause-userinputs-namespace.md) | `step-pause` 写入 `user_inputs.*` 命名空间 + 顶层镜像双写 | active | D8 | v4.1 PR-2（已合入） |
+| [ADR-008](./008-step-pause-userinputs-namespace.md) | `step-pause` 写入 `user_inputs.*` 命名空间 + 顶层镜像双写 | active | D8 | v4.1 PR-2（已合入）+ v4.2 PR-6 修订 |
 | [ADR-009](./009-merge-order-constraint.md) | v4.1 PR 合入顺序 = PR-4 → PR-3 → PR-5 | active | D9 | v4.1 PR-1（已合入） |
-| [ADR-010](./010-step-pause-registry-data-driven.md) | step-pause registry 数据驱动 | active | D10 + V1.1 O10+ Stage-1 + Stage-2 | **v4.2 PR-5（已交付，详见 ADR-010 §6 PR-5 落地纪要）** |
+| [ADR-010](./010-step-pause-registry-data-driven.md) | step-pause registry 数据驱动 | active | D10 + V1.1 O10+ Stage-1 + Stage-2 | **v4.2 PR-5（已交付，详见 ADR-010 §6 PR-5 落地纪要）+ v4.2 PR-6（registry 含 Fix-Confirming，注册表完整集合到 8 项）** |
 | [ADR-011](./011-ci-entry-point.md) | CI 起点 = `.github/workflows/qa-workflow-schema-check.yml` | active | D11 | v4.1 PR-8（已合入） |
 | [ADR-012](./012-install-trae-shim.md) | `install_trae.sh` 改为 shim 调用 | active | D12 | v4.1 PR-7（已合入） |
 | [ADR-013](./013-migrate-script-path.md) | 迁移脚本路径锁定 `mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py` | active | D13 | v4.1 PR-1（已合入） |
-| [ADR-014](./014-step-pause-scope-restriction.md) | `<step-pause>` 调度作用域限定（仅编排器 step 4） | active | D14 | v4.1 PR-1 + PR-2（已合入） + v4.2 PR-3' 修订 |
-| [ADR-015](./015-userinputs-mirror-allowlist.md) | `user_inputs` 顶层镜像白名单受限双写 | active | D15 | v4.1 PR-1 + PR-2（已合入） |
-| [ADR-016](./016-step-pause-required-params.md) | `<step-pause>` 必填参数表（`title` / `result_field` / `allowed_values`） | active | D16 | v4.1 PR-1（已合入） |
+| [ADR-014](./014-step-pause-scope-restriction.md) | `<step-pause>` 调度作用域限定（仅编排器 step 4） | active | D14 | v4.1 PR-1 + PR-2（已合入） + v4.2 PR-3' 修订 + **v4.2 PR-6 收口纪要（D14 整改清零 / §7）** |
+| [ADR-015](./015-userinputs-mirror-allowlist.md) | `user_inputs` 顶层镜像白名单受限双写 | active | D15 | v4.1 PR-1 + PR-2（已合入）+ v4.2 PR-6 修订（白名单下线） |
+| [ADR-016](./016-step-pause-required-params.md) | `<step-pause>` 必填参数表（`title` / `result_field` / `allowed_values`） | active | D16 | v4.1 PR-1（已合入）+ v4.2 PR-5 修订 + **v4.2 PR-6 修订 #2（inline 形态退役）** |
 | [ADR-017](./017-non-bug-context-persistence.md) | `non_bug_context` 字段入 schema 持久化 | active | D17 | v4.1 PR-1（已合入） |
 | [ADR-018](./018-parse-error-circuit-breaker.md) | `parse_error_count` 持久化 + 4 类生命周期动作 | active | D18 | v4.1 PR-1 + PR-2（已合入） |
-| [ADR-019](./019-legacy-step-pause-allowlist.md) | legacy phase `<step-pause>` allowlist 实体化交付 | active | D19 | v4.1 PR-5 + PR-8（已合入） |
+| [ADR-019](./019-legacy-step-pause-allowlist.md) | legacy phase `<step-pause>` allowlist 实体化交付 | **superseded-by-v4.2-PR-6** | D19 | v4.1 PR-5 + PR-8（已合入）+ **v4.2 PR-6 退役（详见 §6 退役纪要）** |
 | [ADR-020](./020-v43-long-term-evolution.md) | v4.3 长期演进规划占位 | superseded-by-v4.3-plan | D20 | v4.3 立项启动 |
 | [ADR-021](./021-phase-abort-macro-tags.md) | `<phase-abort>` / `<phase-complete>` 宏标签 | active | V1.1 O21 | v4.2 PR-3'（已合入） |
 

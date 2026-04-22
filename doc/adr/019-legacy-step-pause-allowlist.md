@@ -1,8 +1,8 @@
 # ADR-019: legacy phase `<step-pause>` allowlist 实体化交付
 
-> **状态**：active
+> **状态**：superseded-by-v4.2-PR-6（v4.2 D14 整改清零 / 详见 ADR-014 §7）
 > **关联决定**：D19（v2.2 review 第 P1-3 项）
-> **关联 PR**：v4.1 PR-5 + PR-8（已合入）
+> **关联 PR**：v4.1 PR-5 + PR-8（已合入）+ v4.2 PR-6 退役（详见 §6）
 
 > **语义复用**：本 ADR 同时承载 v4.2 PR-1 落地的 v3-legacy agent 归档退役（详见 v4.2 PR-1 §2.3 DD-A1~A5 + DD-D1）。"legacy" 一词在本 ADR 内同时覆盖：① v3 现存的 phase 内 step-pause 条目；② v3-legacy 会话恢复专用的 deep-dive agent。两者共享同一退役治理框架。
 
@@ -39,3 +39,17 @@ D14（ADR-014）的 CI/DoD 已经依赖 `mobile-qa-workflow/scripts/legacy-phase
 - ADR-006（Deep-Dive 键名映射延后 / workflow_version 双侧差异）
 - v4.2 PR-1 §2.3（DD-A1~A5 + DD-D1 / v3-legacy agent 归档）
 - v4.2 PR-1 v1.1 §6 议题 H2（双侧 workflow_version 默认值差异统计口径）
+
+## 6. 退役纪要（v4.2 PR-6 / 2026-04-22）
+
+**退役条件**：
+- D14 整改清零（O13 + O14 / phase 内联 step-pause 0 处）→ allowlist 文件中 2 条条目均无对应源码命中；
+- ADR-014 §7 PR-6 收口纪要承接本 ADR 的"D14 例外清单"管理职责（v4.2 PR-6 起无任何例外）。
+
+**物理动作**：
+1. `mobile-qa-workflow/scripts/legacy-phase-step-pause-allowlist.txt` 物理删除（FILE-D1）；
+2. CI Check 1 / Check 2 / Check 6 全部下线（CI-D1）；
+3. `scripts/check-io-contract.sh` 删除 allowlist 加载与豁免分支（SCRIPT-D1），mutex 段保留作为 inline 形态回潮兜底防线；
+4. `scripts/check-step-pause-form.sh` 新增（SCRIPT-D6 / Check 17 / error）作为 single-form 强守门。
+
+**v4.3 演进**：本 ADR 完整退役（无后续动作）；ADR-014 §7 与 ADR-016 v4.2 修订段 #2 共同承接 D14 治理职责。

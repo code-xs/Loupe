@@ -174,5 +174,87 @@ class TestLayerBuilders(unittest.TestCase):
         self.assertIn("iOS", text)
 
 
+# ──────────────────────────────────────────────────────────────────────
+# v4.2 PR-6 / GEN-D3 单测增量（6 项）
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestGenD3Increments(unittest.TestCase):
+    """GEN-D1 + GEN-D2 + GEN-D3 / verify_core_consistency v4.2 兼容 增量校验。"""
+
+    def test_l1_includes_phase_abort_rule(self):
+        """GEN-D1: build_l1 输出必须含 `## phase-abort 宏展开规则` 段（O21 / ADR-021）。"""
+        text = build_module.build_l1_execution_rules(WORKFLOW_ROOT)
+        self.assertIn("## phase-abort 宏展开规则", text)
+        self.assertIn("update_config", text, "RULES-D4 update_config 第 3 步必须落地")
+
+    def test_l1_includes_phase_complete_rule(self):
+        """GEN-D1: build_l1 输出必须含 `## phase-complete 宏展开规则` 段。"""
+        text = build_module.build_l1_execution_rules(WORKFLOW_ROOT)
+        self.assertIn("## phase-complete 宏展开规则", text)
+
+    def test_l1_includes_step_pause_routing_table(self):
+        """GEN-D2: build_l1 输出必须含 8 项 state（含 Fix-Confirming）的 markdown 表格。"""
+        text = build_module.build_l1_execution_rules(WORKFLOW_ROOT)
+        self.assertIn("step-pause-registry 路由表", text)
+        for state in (
+            "Info-Insufficient",
+            "Spec-Uncertain",
+            "Non-Bug",
+            "RCA-LowConfidence",
+            "Curation-Failed",
+            "Human-Review",
+            "Fix-Confirming",
+            "Boundary-Refined",
+        ):
+            self.assertIn(f"`{state}`", text, f"routing table missing state: {state}")
+
+    def test_full_mode_emits_fix_confirming_in_enum(self):
+        """GEN-D3: full mode 输出（含 L0 状态机段）必须含 Fix-Confirming。"""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "preview.md"
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--mode=full", "--output", str(target)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            content = target.read_text(encoding="utf-8")
+            self.assertIn("Fix-Confirming", content)
+
+    def test_full_mode_no_inline_step_pause(self):
+        """GEN-D3: full mode 输出**不含** `<step-pause title=` 行（registry 形态除外）。"""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "preview.md"
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--mode=full", "--output", str(target)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            content = target.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("<step-pause") and "title=" in stripped:
+                    self.fail(f"inline step-pause leaked into full output: {line!r}")
+
+    def test_verify_mode_passes_v42(self):
+        """GEN-D3: verify mode 在含 Fix-Confirming enum 时通过（不报 illegal）。"""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--mode=verify"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+        # 同时确认 ENUM_BLOCK_REGEX 升级后能解出 v4.2 完整集合
+        from pathlib import Path as _P
+
+        enum = build_module._extract_template_enum(
+            _P(WORKFLOW_ROOT) / "core" / "workflow-status-template.yaml"
+        )
+        self.assertIn("Fix-Confirming", enum)
+        self.assertGreaterEqual(len(enum), 15, f"v4.2 完整集合 应≥15 项，实际 {len(enum)}")
+
+
 if __name__ == "__main__":
     unittest.main()

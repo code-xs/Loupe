@@ -11,8 +11,8 @@
 #      已对齐，P4 输出 notice 提示"留 PR-6"）
 #
 # Severity 切换：
-#   PHASE_ABORT_SEVERITY=warning（默认，PR-3' 起步）
-#   PHASE_ABORT_SEVERITY=error  （PR-6 升级，D14 收口完成后）
+#   PHASE_ABORT_SEVERITY=warning（PR-3' 起步，PR-6 前 main 默认值）
+#   PHASE_ABORT_SEVERITY=error  （v4.2 PR-6 起默认 / D14 收口完成）
 #
 # 关联：
 #   · 主控 §4 PR-3 启用列 / 主文档 §2.9 / 附录 §1.1
@@ -23,7 +23,7 @@ set -euo pipefail
 # 切到 mobile-qa-workflow 目录（与同目录其他 check-*.sh 一致）
 cd "$(dirname "$0")/.."
 
-SEVERITY="${PHASE_ABORT_SEVERITY:-warning}"
+SEVERITY="${PHASE_ABORT_SEVERITY:-error}"   # v4.2 PR-6 起默认 error；warning 模式仅供本地调试
 TPL="core/workflow-status-template.yaml"
 fail=0
 
@@ -49,7 +49,7 @@ lines = src.splitlines()
 collect = False
 block = []
 for ln in lines:
-    if not collect and 'v4.1 完整集合' in ln:
+    if not collect and ('v4.1 完整集合' in ln or 'v4.2 完整集合' in ln):
         collect = True
         continue
     if collect:
@@ -85,7 +85,7 @@ PY
 )
 
 if [ -z "$ENUM_SET" ]; then
-  echo "::error::无法从 $TPL 头部抽取权威 enum 集（v4.1 完整集合注释块缺失？）"
+  echo "::error::无法从 $TPL 头部抽取权威 enum 集（v4.1/v4.2 完整集合注释块缺失？）"
   exit 1
 fi
 
@@ -115,14 +115,25 @@ check_state() {
 
 check_fields_keys() {
   # $1 = file, $2 = line, $3 = fields json literal
+  # v4.2 PR-6 / SCRIPT-D3：只校验 JSON 顶层 key（嵌套 user_inputs.<key> 不属于顶层 schema 字段）
   local file="$1" line="$2" json="$3"
   if [ -z "$json" ]; then return; fi
-  # 抽取 JSON 字面量中的 key（"<key>": ...）
   local keys
-  keys=$(echo "$json" | grep -oE '"[A-Za-z_][A-Za-z0-9_]*"[[:space:]]*:' | sed -E 's/^"([A-Za-z_][A-Za-z0-9_]*)".*/\1/')
+  keys=$(python3 - "$json" <<'PY'
+import json, re, sys
+raw = sys.argv[1]
+try:
+    obj = json.loads(raw)
+except Exception:
+    sys.exit(0)
+if isinstance(obj, dict):
+    for k in obj.keys():
+        print(k)
+PY
+)
   for k in $keys; do
     if ! echo " $FIELD_SET " | grep -q " $k "; then
-      emit "$SEVERITY" "$file:$line: fields key '$k' 不在 workflow-status-template.yaml 顶层字段表内"
+      emit "$SEVERITY" "$file:$line: fields top-level key '$k' 不在 workflow-status-template.yaml 顶层字段表内"
     fi
   done
 }
@@ -141,11 +152,8 @@ check_phase_has_macro() {
   if grep -qE '<phase-(abort|complete)\b' "$file"; then
     return 0
   fi
-  if [[ "$file" == *p4-fix-design* ]]; then
-    echo "::notice::$file: P4 未用宏（PR-6 删除内联 step-pause 后改写 / 详见主文档 §2.3.2）"
-  else
-    emit "$SEVERITY" "$file: 未发现任何 phase-complete/abort 宏（phase 文件至少需含 1 处宏出口）"
-  fi
+  # v4.2 PR-6 / SCRIPT-D3：删除 P4 notice 特例，统一 emit error；P4 含 phase-abort Fix-Confirming 后此分支不再触发
+  emit "$SEVERITY" "$file: 未发现任何 phase-complete/abort 宏（phase 文件至少需含 1 处宏出口）"
 }
 
 # 用 python 一次性提取每个宏的 state / fields，避免多行属性 grep 难度

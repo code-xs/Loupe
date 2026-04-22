@@ -78,6 +78,63 @@ ${k}"
     done
 done < <(grep -rnE '更新.*config_source' "${SCAN_DIRS[@]}" 2>/dev/null || true)
 
+# 3. v4.2 PR-6 / SCRIPT-D7（v1.1 / Fix-6）：覆盖 <phase-complete>/<phase-abort> 宏 update_config 属性的 key 校验
+#    宏属性 update_config='{"k1": "...", "k2": "..."}' 的顶层 key 等价于"更新 {config_source}：k = ..."
+#    若仅扫描显式文本，宏 key 会成为 M16 校验盲区。
+macro_keys=$(python3 - "${SCAN_DIRS[@]}" <<'PY'
+import json, os, re, sys
+roots = sys.argv[1:]
+out = []  # (file, lineno, key)
+pattern = re.compile(
+    r"<phase-(?:abort|complete)\b([^>]*?)/?>",
+    re.DOTALL,
+)
+for root in roots:
+    if not os.path.isdir(root):
+        continue
+    for dirpath, _, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                src = open(path, encoding="utf-8").read()
+            except Exception:
+                continue
+            for m in pattern.finditer(src):
+                attrs = m.group(1)
+                u = re.search(r"update_config\s*=\s*'([^']*)'", attrs)
+                if not u:
+                    continue
+                line_no = src.count("\n", 0, m.start()) + 1
+                try:
+                    obj = json.loads(u.group(1))
+                except Exception:
+                    print(f"__PARSE_FAIL__\t{path}\t{line_no}\t{u.group(1)}")
+                    continue
+                if isinstance(obj, dict):
+                    for k in obj.keys():
+                        print(f"{path}\t{line_no}\t{k}")
+PY
+)
+
+if [ -n "$macro_keys" ]; then
+    while IFS=$'\t' read -r path line k; do
+        [ -z "$path" ] && continue
+        if [ "$path" = "__PARSE_FAIL__" ]; then
+            echo "[M16-FAIL] $line:$k macro update_config JSON 解析失败"
+            fail=1
+            continue
+        fi
+        seen_keys="${seen_keys}
+${k}"
+        if ! echo "$ALLOWED" | grep -qx "$k"; then
+            echo "[M16-FAIL] $path:$line unknown macro update_config key: $k"
+            fail=1
+        fi
+    done <<< "$macro_keys"
+fi
+
 if [ "$fail" -eq 0 ]; then
     n_seen=$(printf '%s\n' "$seen_keys" | grep -v '^$' | sort -u | wc -l | tr -d ' ')
     echo "[M16-OK] all ${n_seen} config_source write keys registered in config-schema.yaml"

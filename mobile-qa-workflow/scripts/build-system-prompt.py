@@ -22,9 +22,12 @@
   python build-system-prompt.py --mode=full --output=preview.md
   python build-system-prompt.py --mode=layered --output-dir=build/system-prompt-layered/
 
-⚠️ v4.2 PR-2 阶段：本脚本只交付，禁止运行 --mode=full 替换 system-prompt.md
-   （H1 守门：见 check-build-system-prompt-precondition.sh + 本脚本内 ALLOW_FIRST_BUILD 门）。
-   首次构建并替换在 PR-6 内执行（依赖 PR-4 O13a 已合入）。
+v4.2 PR-2：脚本首次交付（PR-2 阶段禁止运行 --mode=full 替换 system-prompt.md，由 H1 守门拦截）。
+v4.2 PR-6（GEN-D1/D2/D3）：
+  - GEN-D1：build_l1_execution_rules 增加 phase-abort / phase-complete 宏展开规则抽取（O21 / ADR-021）
+  - GEN-D2：新增 _build_routing_table 注入 step-pause-registry 路由表（与 SCRIPT-D2 三元组对账闭环）
+  - GEN-D3：单测增量 + ENUM_BLOCK_REGEX 升级为 v4.[12] 兼容
+  - SP-N1：首次自动构建并替换 system-prompt.md（解 H1 / 用 ALLOW_FIRST_BUILD=1 解锁）
 """
 from __future__ import annotations
 
@@ -77,13 +80,112 @@ PHASE_ORDER_FALLBACK = [
 ]
 
 STATE_TRANSITIONS_HUMAN = """\
-状态机概览（权威源 = core/workflow-status-template.yaml v4.1 完整集合）：
+状态机概览（权威源 = core/workflow-status-template.yaml v4.2 完整集合 / 含 Fix-Confirming）：
   Intake → Spec-Defining → (Spec-Uncertain ↺ | Context-Curating → Curation-Failed ↺)
        → Boundary-Refined → RCA-Designing → (RCA-LowConfidence ↺ | Fix-Designing)
-       → Fix-Implementing → Verifying → Done
+       → Fix-Confirming → (Continue | Revise ↺ Fix-Designing) → Fix-Implementing
+       → Verifying → Done
   Non-Bug 早退：Spec-Defining → Non-Bug → (Done | Spec-Defining 重审 | Human-Review)
   熔断兜底：任意 stop_state 累计触发 → Human-Review
 """
+
+
+def _extract_enum_ordered(template_path: Path) -> list[str]:
+    """从 workflow-status-template.yaml 头部 enum 注释块按顺序抽取 v4.2 完整集合。
+
+    与 verify_core_consistency 的 set 版本互补：本函数保留出现顺序，用于渲染
+    ENUM-DECLARATION-BLOCK（reviewer 需要按 template 顺序对账）。
+    """
+    if not template_path.is_file():
+        return []
+    text = _read(template_path)
+    m = ENUM_BLOCK_REGEX.search(text)
+    if not m:
+        return []
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for line in m.group(1).splitlines():
+        body = re.sub(r"^#\s+", "", line)
+        if "/" not in body:
+            continue
+        for chunk in body.split("/"):
+            tok = chunk.strip()
+            if STATE_TOKEN_REGEX.fullmatch(tok) and tok not in seen:
+                seen.add(tok)
+                ordered.append(tok)
+    return ordered
+
+
+def build_header_block(workflow_root: Path = WORKFLOW_ROOT) -> str:
+    """v4.2 PR-6 / SP-N1：渲染 system-prompt.md 文件头（autogen 注释 + ENUM-DECLARATION-BLOCK + 标题）。
+
+    与 §2.7.3 一致：
+      - autogen 注释含 @ schema_version / @ sync-check（PR-6 首次自动构建基线）/ @ build-cmd
+      - ENUM-DECLARATION-BLOCK 从 workflow-status-template.yaml 头部 v4.2 完整集合抽取（保序）
+      - 标题段固定 "# Mobile B2C 质量问题工作流 — 完整 System Prompt"
+    """
+    template_path = workflow_root / "core" / "workflow-status-template.yaml"
+    enum_ordered = _extract_enum_ordered(template_path)
+    if enum_ordered:
+        rows: list[str] = []
+        line_buf: list[str] = []
+        for tok in enum_ordered:
+            line_buf.append(tok)
+            if len(line_buf) >= 5:
+                rows.append("  " + ", ".join(line_buf) + ",")
+                line_buf = []
+        if line_buf:
+            rows.append("  " + ", ".join(line_buf))
+        if rows and rows[-1].endswith(","):
+            rows[-1] = rows[-1].rstrip(",")
+        enum_lines = "\n".join(rows)
+    else:
+        enum_lines = "  (enum 抽取失败 — 检查 workflow-status-template.yaml 头部注释块)"
+
+    autogen = (
+        "<!--\n"
+        "========================================================================\n"
+        "AUTOGEN-FROM:\n"
+        "  core/core-rules.xml\n"
+        "  core/workflow.xml\n"
+        "  core/workflow-status-template.yaml\n"
+        "  core/default-config.yaml\n"
+        "  core/workflow-model.yaml\n"
+        "  core/step-pause-registry.yaml\n"
+        "\n"
+        "@ schema_version=4\n"
+        "@ sync-check=2026-04-22（PR-6 首次自动构建基线）\n"
+        "@ build-cmd=ALLOW_FIRST_BUILD=1 python3 scripts/build-system-prompt.py --mode=full --output=system-prompt.md\n"
+        "\n"
+        "✅ 本文件由 `scripts/build-system-prompt.py` 自动构建；任何手改将被 CI Check 14\n"
+        "   (build-system-prompt 单测) + Check 10 (system-prompt-sync) 拦截。\n"
+        "========================================================================\n"
+        "-->\n"
+        "\n"
+    )
+
+    enum_block = (
+        "<!-- ENUM-DECLARATION-BLOCK -->\n"
+        "<!--\n"
+        "本块由 CI `check-system-prompt-sync.sh` 与 core/workflow-status-template.yaml 头部 enum 集做\"声明块对声明块\"严格比对。\n"
+        "本块内容必须与 core/workflow-status-template.yaml 头部 v4.2 完整集合 100% 一致（含顺序 + 名称大小写）。\n"
+        "v4.2 完整集合（按 workflow-status-template.yaml 头部顺序）：\n"
+        f"{enum_lines}\n"
+        "-->\n"
+        "<!-- /ENUM-DECLARATION-BLOCK -->\n"
+        "\n"
+    )
+
+    title = (
+        "# Mobile B2C 质量问题工作流 — 完整 System Prompt\n"
+        "\n"
+        "> **适用场景**：不支持外部文件引用的 AI 平台（Dify、Coze、OpenAI Assistants、LangChain Agent、\n"
+        "> 纯 Chat 对话等）。本文件由 `scripts/build-system-prompt.py` 从 `core/` 自动构建。\n"
+        "\n"
+        "---\n"
+    )
+
+    return autogen + enum_block + title
 
 
 def _extract_phase_order(workflow_root: Path) -> list[str]:
@@ -143,6 +245,14 @@ def build_l1_execution_rules(workflow_root: Path = WORKFLOW_ROOT) -> str:
     human_review = _extract_section(
         core_rules, r"^\s*<human-review-protocol\b[^>]*>", r"^\s*</human-review-protocol>"
     )
+    # v4.2 PR-6 / GEN-D1：抽取 phase-abort / phase-complete 宏展开规则块
+    # （来自 ADR-021；与 PR-3' 已写入 system-prompt.md 0.2 节字面同源 / 含 v1.1 RULES-D4 update_config 第 3 步）
+    phase_abort_rule = _extract_section(
+        core_rules, r'^\s*<tag name="phase-abort">', r"^\s*</tag>"
+    )
+    phase_complete_rule = _extract_section(
+        core_rules, r'^\s*<tag name="phase-complete">', r"^\s*</tag>"
+    )
 
     parts = ["# L1 · 执行规则\n"]
     if workflow_rules:
@@ -153,7 +263,53 @@ def build_l1_execution_rules(workflow_root: Path = WORKFLOW_ROOT) -> str:
         parts.append("## workflow-result-protocol（ABORT 协议）\n\n```xml\n" + result_protocol.strip() + "\n```\n")
     if human_review:
         parts.append("## human-review-protocol（熔断触发器）\n\n```xml\n" + human_review.strip() + "\n```\n")
+    if phase_abort_rule:
+        parts.append(
+            "## phase-abort 宏展开规则（O21 / ADR-021）\n\n```xml\n"
+            + phase_abort_rule.strip()
+            + "\n</tag>\n```\n"
+        )
+    if phase_complete_rule:
+        parts.append(
+            "## phase-complete 宏展开规则（O21 / ADR-021）\n\n```xml\n"
+            + phase_complete_rule.strip()
+            + "\n</tag>\n```\n"
+        )
+    routing_table = _build_routing_table(workflow_root)
+    if routing_table:
+        parts.append(routing_table)
     return "\n".join(parts)
+
+
+def _build_routing_table(workflow_root: Path) -> str:
+    """v4.2 PR-6 / GEN-D2：从 step-pause-registry.yaml 渲染 8 项 state 的简表。
+
+    输出 markdown 表格，列 = state / result_field / allowed_values；route 类条目（kind: route，
+    无 result_field/allowed_values）以 `(route)` 占位。与 SCRIPT-D2 三元组对账闭环。
+    """
+    path = workflow_root / "core" / "step-pause-registry.yaml"
+    if not path.is_file():
+        return ""
+    text = _read(path)
+    items = re.findall(
+        r"^\s*-\s*state:\s*([A-Za-z][A-Za-z0-9-]*)\s*(?:#[^\n]*)?\n((?:.|\n)*?)(?=^\s*-\s*state:|\Z)",
+        text,
+        re.M,
+    )
+    if not items:
+        return ""
+    rows = ["| state | result_field | allowed_values |", "|---|---|---|"]
+    for state, body in items:
+        rf_m = re.search(r"result_field:\s*([^\n]+)", body)
+        av_m = re.search(r"allowed_values:\s*\[([^\]]+)\]", body)
+        rf = rf_m.group(1).strip() if rf_m else "(route)"
+        av = av_m.group(1).strip() if av_m else "(route)"
+        rows.append(f"| `{state}` | `{rf}` | `{av}` |")
+    return (
+        "## step-pause-registry 路由表（v4.2 PR-6 起 / O10+ + O14）\n\n"
+        + "\n".join(rows)
+        + "\n"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -280,13 +436,13 @@ def build_l4_platform_knowledge(
 # ──────────────────────────────────────────────────────────────────────
 
 ENUM_BLOCK_REGEX = re.compile(
-    r"v4\.1\s*完整集合[^\n]*\n((?:#\s+\S.*\n)+)"
+    r"v4\.[12]\s*完整集合[^\n]*\n((?:#\s+\S.*\n)+)"
 )
 STATE_TOKEN_REGEX = re.compile(r"[A-Z][A-Za-z-]+")
 
 
 def _extract_template_enum(template_path: Path) -> set[str]:
-    """从 workflow-status-template.yaml 注释块中提取 v4.1 完整集合 enum 名。"""
+    """从 workflow-status-template.yaml 注释块中提取 v4.1 / v4.2 完整集合 enum 名。"""
     if not template_path.is_file():
         return set()
     text = _read(template_path)
@@ -322,7 +478,7 @@ def verify_core_consistency(workflow_root: Path = WORKFLOW_ROOT) -> list[str]:
     enum_template = _extract_template_enum(template_path)
     if not enum_template:
         issues.append(
-            f"workflow-status-template.yaml 未提取到 v4.1 完整集合 enum 注释块"
+            "workflow-status-template.yaml 未提取到 v4.1/v4.2 完整集合 enum 注释块"
         )
     enum_writes = _extract_workflow_state_writes(workflow_path)
     illegal = enum_writes - enum_template
@@ -394,7 +550,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "首次构建由 PR-6 触发（设置 ALLOW_FIRST_BUILD=1 解锁）\n"
             )
             return 3
-        full_content = "\n\n".join(
+        full_content = build_header_block(wfr) + "\n" + "\n\n".join(
             [
                 build_l0_identity(wfr),
                 build_l1_execution_rules(wfr),

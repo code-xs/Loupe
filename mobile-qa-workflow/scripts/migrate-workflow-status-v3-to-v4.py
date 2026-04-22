@@ -8,18 +8,21 @@ Requires:
   · ruamel.yaml >= 0.17     # pip install -r mobile-qa-workflow/scripts/requirements.txt
                             # 或: pip install 'ruamel.yaml>=0.17'
 
-迁移动作（与 core/workflow-status-template.yaml v4.1 / v4.2 PR-2 schema 一一对应）:
+迁移动作（与 core/workflow-status-template.yaml v4.1 / v4.2 PR-2 / v4.2 PR-6 schema 一一对应）:
   · schema_version: 3 -> 4
-  · 注入 6 个新顶层字段（缺失即注入默认值，存在即保留原值，幂等）:
+  · 注入 5 个新顶层字段（缺失即注入默认值，存在即保留原值，幂等）:
       - fix_fanout_mode: None
       - phase_history: []
       - user_inputs: {}
       - non_bug_context: None
       - parse_error_count: 0
-      - non_bug_user_choice: None        # 顶层镜像白名单（v4.1 起步集，v4.2 收敛删除）
   · v4.2 PR-2 修订（O7 / ADR-007 v4.2 修订段落）：已废弃字段不再注入：
       - rca_fanout_mode_snapshot（删除：方案 A phase_history 反查已是主路径）
       - fix_strategy_mode（合并到 fix_fanout_mode）
+  · v4.2 PR-6 修订（O12 / ADR-015 §6 v4.2 修订段）：顶层镜像字段全量下线，
+    本脚本不再注入 `non_bug_user_choice` 顶层字段；存量 v4 会话由
+    `--cleanup-v4-deprecated` 子命令幂等清理（迁移到 user_inputs.non_bug_user_choice
+    并删除顶层）。
     存量 v4 会话使用 `--cleanup-v4-deprecated` 子命令幂等清理。
 
 不做的事:
@@ -55,14 +58,17 @@ NEW_FIELDS_DEFAULTS: list[tuple[str, object]] = [
     ("user_inputs", CommentedMap()),
     ("non_bug_context", None),
     ("parse_error_count", 0),
-    ("non_bug_user_choice", None),
+    # v4.2 PR-6 / TPL-D2：non_bug_user_choice 顶层镜像字段下线（详见 ADR-015 §6 v4.2 修订段）。
+    # 用户回复改写到 user_inputs.non_bug_user_choice 单写。
 ]
 # v4.2 PR-2 修订（O7 / O8 / ADR-007 v4.2 修订段落）：
 # 已废弃字段不再注入：rca_fanout_mode_snapshot（删除）/ fix_strategy_mode（合并到 fix_fanout_mode）。
-# 存量会话清理：使用 `--cleanup-v4-deprecated` 子命令幂等处理。
+# v4.2 PR-6 修订（O12 / ADR-015 §6）：顶层镜像 non_bug_user_choice 一并加入清理列表，
+# 由 `--cleanup-v4-deprecated` 子命令把存量值搬到 user_inputs.non_bug_user_choice 后删除顶层。
 DEPRECATED_FIELDS_V4_2: list[str] = [
     "rca_fanout_mode_snapshot",
     "fix_strategy_mode",
+    "non_bug_user_choice",
 ]
 
 # 新字段的锚点：必须插入到该字段之前，确保新字段全部落入
@@ -139,10 +145,13 @@ def migrate(doc: CommentedMap, *, strict: bool = True) -> tuple[bool, list[str]]
 
 
 def cleanup_v4_deprecated(doc: CommentedMap) -> tuple[bool, list[str]]:
-    """v4 内部清理（v4.2 PR-2 / O7 + O8）：
+    """v4 内部清理（v4.2 PR-2 / O7 + O8 + v4.2 PR-6 / O12）：
 
-    幂等地把存量会话的 fix_strategy_mode 拷贝到 fix_fanout_mode（仅当后者缺失/空），
-    再删除 rca_fanout_mode_snapshot 与 fix_strategy_mode 两个已废弃字段。
+    1. 幂等地把存量会话的 fix_strategy_mode 拷贝到 fix_fanout_mode（仅当后者缺失/空），
+       再删除 rca_fanout_mode_snapshot 与 fix_strategy_mode 两个已废弃字段。
+    2. v4.2 PR-6：把存量会话的顶层 non_bug_user_choice 搬到 user_inputs.non_bug_user_choice
+       （仅当 user_inputs 内尚未有同名 key），再删除顶层 non_bug_user_choice
+       （详见 ADR-015 §6 v4.2 修订段 / TPL-D2）。
 
     返回 (是否变更, 动作日志)。
     """
@@ -161,6 +170,25 @@ def cleanup_v4_deprecated(doc: CommentedMap) -> tuple[bool, list[str]]:
             log.append(
                 f"skip-copy: fix_fanout_mode already set "
                 f"(={doc['fix_fanout_mode']!r}); leaving fix_strategy_mode alone for delete"
+            )
+
+    # v4.2 PR-6 / O12：顶层 non_bug_user_choice 下线，搬迁到 user_inputs.non_bug_user_choice
+    if "non_bug_user_choice" in doc and doc.get("non_bug_user_choice") is not None:
+        ui = doc.get("user_inputs")
+        if not isinstance(ui, (CommentedMap, dict)):
+            ui = CommentedMap()
+            doc["user_inputs"] = ui
+        if "non_bug_user_choice" not in ui:
+            ui["non_bug_user_choice"] = doc["non_bug_user_choice"]
+            log.append(
+                f"copy: non_bug_user_choice (顶层) -> user_inputs.non_bug_user_choice "
+                f"(value={doc['non_bug_user_choice']!r}; v4.2 PR-6 / O12 / ADR-015 §6)"
+            )
+            changed = True
+        else:
+            log.append(
+                f"skip-copy: user_inputs.non_bug_user_choice already set "
+                f"(={ui['non_bug_user_choice']!r}); leaving 顶层 non_bug_user_choice alone for delete"
             )
 
     for field in DEPRECATED_FIELDS_V4_2:

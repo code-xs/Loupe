@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENUM_FILE="core/workflow-status-template.yaml"
-ALLOWED=$(awk '/v4.1 完整集合/,/^[^#]/' "$ENUM_FILE" \
+ALLOWED=$(awk '/v4\.[12] 完整集合/,/^[^#]/' "$ENUM_FILE" \
   | grep -oE '[A-Z][A-Za-z-]+' | sort -u)
 
 HITS=$(grep -rEn 'current_state\s*=\s*[A-Z][A-Za-z-]+' \

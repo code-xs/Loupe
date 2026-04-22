@@ -26,6 +26,9 @@
                     <load target="mobile-qa-workflow/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
                 </check>
                 <action>读取 {workflow_status} 文件，获取 stepsCompleted、current_state、workflow_version、schema_version、analysis_complexity、fanout_mode、fix_fanout_mode、reroute_target_phase、rca_retry_count、fix_retry_count、phase_history</action>
+                <!-- v4.2 PR-6 enum 集变更：current_state 新增 Fix-Confirming
+                     （位于 Fix-Designing 与 Fix-Implementing 之间，触发 P4 step 6 用户确认）；
+                     权威源 core/workflow-status-template.yaml 头部 v4.2 完整集合注释。 -->
                 <check if="workflow_version 为空">
                     <action>将当前状态视为旧版状态文件，补充兼容默认值：workflow_version = legacy, schema_version = 1, fanout_mode = null, fix_fanout_mode = null, reroute_reason = null, reroute_target_phase = null, rca_retry_count = 0, fix_retry_count = 0</action>
                 </check>
@@ -116,11 +119,7 @@
                             {value} 必须 ∈ allowed_values（不在判定解析失败）</action>
 
                     <check if="解析成功">
-                        <action>更新 {workflow_status}：user_inputs.{key} = {value}（D15 总写）</action>
-                        <check if="该 registry 项 mirror_to_top == true">
-                            <action>同步镜像写入 workflow_status.{key} = {value}
-                                    （v4.2 PR-5 起仅 Non-Bug 一项；v4.2 遗留 #3 删除后本块一并下线）</action>
-                        </check>
+                        <action>更新 {workflow_status}：user_inputs.{key} = {value}（v4.2 PR-6 起单写，无 mirror / D15 收口）</action>
                         <action>更新 {workflow_status}：parse_error_count = 0（D18 解析成功立即清零）</action>
                     </check>
 
@@ -156,15 +155,8 @@
             </step>
 
             <step n="4c" goal="状态路由（registry 查表 / v1.1 修订：按 kind 派发）">
-                <!-- ANCHOR: spec-uncertain-allowed-values -->
-                <!-- v4.2 PR-5 过渡锚点：PR-2 引入 ANCHOR-N2 用于 system-prompt sync 守门
-                     （check-system-prompt-sync.sh / check-build-system-prompt-precondition.sh
-                     依赖本锚点 + 锚点后窗口 25 行抓 allowed_values=）。XML-D1 step 4 重写后
-                     Spec-Uncertain 字面已迁移到 step-pause-registry.yaml，本注释保留锚点 +
-                     字面 allowed_values="1|2|S" 作为过渡桥接，与 registry 项 Spec-Uncertain
-                     的 allowed_values: ["1", "2", "S"] 字面同源。PR-6 build-system-prompt.py
-                     首次构建并把 registry 注入 sp 之后由 PR-6 同步删除本注释 + 把两脚本
-                     抽取目标改为 registry.yaml（v4.2 PR-5 v1.1 落地，与 ADR-010 §6.6 衔接事项 #2 联动）。 -->
+                <!-- v4.2 PR-6 落地：Spec-Uncertain 字面已 100% 迁移到 step-pause-registry.yaml
+                     的 `state: Spec-Uncertain` 项；ANCHOR-N2 锚点已下线（详见 SCRIPT-D2 / SCRIPT-D4）。 -->
                 <load target="mobile-qa-workflow/core/step-pause-registry.yaml"/>
 
                 <check if="{current_state} == Done">
@@ -188,8 +180,7 @@
                             <action>按 registry 项 on_success.{user_inputs.&lt;result_field&gt;} 执行原子动作序列：
                                     set_state / write / increment / check（true/false 子块）/ goto / terminal / interpret_freetext
                                     （详见 ADR-010 §0 与 step-pause-registry.yaml schema 注释）</action>
-                            <action>派发完成后清空 user_inputs.{result_field}（消费一次性输入）；
-                                    若 mirror_to_top == true，同步清空 workflow_status.{result_field}</action>
+                            <action>派发完成后清空 user_inputs.{result_field}（消费一次性输入 / v4.2 PR-6 起 mirror 双写已下线）</action>
                             <action>按 on_success 中的 goto 跳转（terminal:true 时直接结束）</action>
                         </check>
                     </check>

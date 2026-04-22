@@ -33,3 +33,29 @@ ADR-008 定义了"`user_inputs.<key>` 总写 + 顶层镜像双写"的过渡方�
 - v2.2 主文档 §6 D15 拍板纪要
 - ADR-008（双写过渡总框架）
 - ADR-017（non_bug_context 是镜像白名单的兼容字段，单独 ADR 描述）
+
+## 6. v4.2 PR-6 修订段 — 顶层镜像白名单全量下线（O12 收尾 / 2026-04-22）
+
+**变化背景**：v4.1 起步白名单 = `{ non_bug_user_choice }`（仅 1 项）的"白名单元协议"维护成本
+（PR Review + CI 4 个 Check + 跨文档说明）显著高于其收益。v4.2 PR-6 完成 O12 收尾：
+保留双写实现已不必要（编排器 4a 改为单写 user_inputs.<key>），同步删除顶层镜像字段定义。
+
+**收口动作**：
+1. `core/workflow-status-template.yaml` 删除顶层 `non_bug_user_choice` 字段（TPL-D2）；
+2. `core/workflow-status-template.yaml` 删除"⚠️ 顶层镜像字段白名单"注释段（TPL-D2）；
+3. `core/workflow.xml` step 4a 删除 mirror_to_top 双写分支（XML-D1）；
+4. `core/step-pause-registry.yaml` 删除 Non-Bug 项 mirror_to_top 标记（REG-D1）；
+5. `core/core-rules.xml` `<input-protocol>` rule n=5 简化为单写描述（RULES-D1）；
+6. `system-prompt.md` 全量重写后不含"白名单受限双写"段（SP-N1，由 Seg-2 完成）；
+7. `PLATFORM-GUIDE.md` 删除顶层镜像白名单说明（DOC-D1）；
+8. CI Check 3 / Check 4 全部下线（依赖白名单段已不存在 / 由 Seg-3 完成）。
+
+**收口后契约**：
+- 编排器 4a 解析 step-pause 用户回复后**仅写入** `user_inputs.<result_field>`（单写）；
+- phase / system-prompt / PLATFORM-GUIDE 引用用户回复值时，统一使用 `{user_inputs.<key>}` 形式；
+- 历史镜像字段恢复路径：若未来需要恢复某字段顶层镜像（罕见），需通过新 ADR 评估，绑定 schema 复活 + 编排器双写改造 + CI 守门重建。
+
+**关联**：
+- ADR-008（v4.2 PR-6 修订段：顶层镜像协议正式退役）
+- ADR-014 §7 PR-6 收口纪要
+- ADR-019 superseded

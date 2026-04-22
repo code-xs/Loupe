@@ -32,7 +32,7 @@ description: Stage 5 — 防御性修复附录，按需触发
     <step n="3" goal="生成防御性修复附录">
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="defensive-fix-architect" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/agents/defensive-fix-architect.md' prompt='加载角色定义'/>
                 基于专项 RCA 输出状态机加固、生命周期感知处理、竞态收敛与适度性评审，区分止血方案与长期方案。"/>
         </check>

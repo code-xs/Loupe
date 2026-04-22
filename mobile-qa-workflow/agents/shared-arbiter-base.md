@@ -9,25 +9,17 @@
 - `comparison_focus`: 本次裁定的关键对比维度
 - `base_score`: 候选结论基础评分或原始置信度
 
-## 入参完整性校验（v4.1 / C2 wrapper）
+## 入参完整性校验（v4.2 PR-7 / O19+ / shared-input-guard）
 
-> 本节为 C2 修复的 wrapper 端实现：调用方（PR-4 P3/P4 已落地）必须在 invoke 前注入
-> `base_score`；若 wrapper 在执行前检测到该入参缺失或类型非数值，必须**立即停止推理**
-> 并输出标准化错误标签，便于 PR-8 CI / 后续 trace 定位调用方缺陷。
+> v4.2 PR-7 / O19+ / §3.6：本段从原 v4.1 / C2 wrapper 文本抽取至
+> [`agents/shared-input-guard.md`](./shared-input-guard.md)，与
+> `shared-challenger-base.md` 通过单一参数 `required_field` 同源复用，避免双写漂移。
+>
+> **本 wrapper 写死 `required_field = base_score`**（候选结论基础评分或原始置信度）。
+> 除 `base_score` 外的其它入参缺失（`scene` / `candidate_set` / `challenge_reports` /
+> `comparison_focus`）按 v4.1 范围口径 D5 暂**不**视为 Schema-Violation。
 
-执行任何"统一裁定协议"步骤之前，必须按以下顺序自检入参：
-
-1. 若 `base_score` 缺失（未提供 / 为 null / 为空字符串）：
-   - 输出固定文本：`[Schema-Violation: missing base_score]`
-   - 不再继续后续推理；不产出 `## Arbiter Ruling` 任何字段
-2. 若 `base_score` 存在但非数值（无法被解析为浮点数）：
-   - 输出固定文本：`[Schema-Violation: invalid base_score type]`
-   - 不再继续后续推理
-3. `scene` / `candidate_set` / `challenge_reports` / `comparison_focus` 缺失暂不视为
-   Schema-Violation（v4.1 范围口径 D5：仅 C2 必修 `base_score`，其它入参治理延后 v4.2）
-
-> **校验失败的语义**：`[Schema-Violation: missing base_score]` 是调用方契约错误，
-> 不是裁定不确定（不应转为 `[Arbiter-Uncertain]` 或 Human-Review）；调用方必须修复后重试。
+<load target="mobile-qa-workflow/agents/shared-input-guard.md" prompt="加载 wrapper 入参完整性校验通用契约（required_field=base_score）"/>
 
 ## 统一裁定协议
 1. 先汇总候选，再做质疑吸收，最后输出裁定。

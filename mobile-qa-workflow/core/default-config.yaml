@@ -35,12 +35,9 @@ active_fix_strategy_policy: "risk-and-confidence"
 output_runtime_compat_report: null
 output_reroute_trace: null
 
-# ⚠️ v4.2 遗留 #1（D4 决定 / 主文档 §1.2.2）：
-# 本块键名为 environment_factor_report / deep_dive_topology / concurrency_analysis_report，
-# 子配置 functionality-deep-dive/core/default-config.yaml 的对应键名为
-# emit_environment_factor_report / emit_topology_report / emit_concurrency_report。
-# 两套命名存在键名漂移；v4.1 PR-5 仅做 B3 表层修复（子配置三个 emit_* 默认值翻 true），
-# 主子键名映射统一机制延后到 v4.2 遗留 #1（关联 M9）。
+# v4.2 PR-7 / O16-A 已收敛：本块与 functionality-deep-dive/core/default-config.yaml
+# 同步使用 `deep_dive_optional_artifacts.*` 命名（旧 emit_* 已下线，schema/CI 守门）。
+# 三个二级键定版（K1）：environment_factor_report / deep_dive_topology / concurrency_analysis_report
 deep_dive_optional_artifacts:
   environment_factor_report: true
   deep_dive_topology: true

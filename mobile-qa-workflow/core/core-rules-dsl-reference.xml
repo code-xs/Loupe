@@ -1,39 +1,22 @@
-<!--
-  ============================================================
-  AUTOGEN — DO NOT EDIT
-  Sources:
-    · core/core-rules-essential.xml      (skeleton + insertion marker)
-    · core/core-rules-dsl-reference.xml  (supported-tags subset)
-  Generator: scripts/sync-core-rules-aggregate.py (v4.2 PR-7 / O23 / D-AGG-1)
-  本文件由聚合脚本生成；任何手改将被 CI Check 18 (sync-core-rules-aggregate)
-  以及 Check 10 (system-prompt-sync 间接) 拦截。
-  编辑请改两个源文件之一，然后运行：
-    python3 mobile-qa-workflow/scripts/sync-core-rules-aggregate.py --write
-  ============================================================
--->
-<core-rules id="mobile-qa/core-rules.xml" name="Mobile QA Workflow Core Rules">
-    <llm critical="true">
-        <mandate>务必读取完整文件 - 读取任何与工作流相关的文件时，切勿使用偏移量/限制</mandate>
-        <mandate>务必严格按照指令顺序执行所有步骤</mandate>
-        <mandate>严禁将多个 step 合并执行或跳过 - 每个步骤必须作为独立事务执行</mandate>
-        <mandate>切勿跳过任何步骤 - 确保每个步骤的执行无误且无任何借口</mandate>
-        <mandate>遇到等待用户确认的流程（如 step-pause、ask），必须立即暂停并等待用户明确响应</mandate>
-        <mandate>所有产物必须按模板格式输出到工作区文件（有文件系统时）或以 Markdown 代码块内嵌在回复中（无文件系统时）</mandate>
-        <mandate>遇到 invoke-subagent 标签时，必须将 subagent_prompt 内容作为不透明黑盒字符串原样透传，严禁主 Agent 提前解析</mandate>
-    </llm>
-
-    <agent-taxonomy>
-        <rule>业务角色：直接承担 RCA、Fix、Deep-Dive 等业务闭环职责的 Agent，例如 curator、investigator、challenger、arbiter、fix-proposer、coder-agent 以及各类 deep-dive analyst。</rule>
-        <rule>能力型 Agent：为工作流提供检索或基础能力，但不计入业务角色数量统计，例如 `search`。</rule>
-    </agent-taxonomy>
-
-    <WORKFLOW-RULES critical="true">
-        <rule n="1">step 按精确的数字顺序执行 (1, 2, 3...)</rule>
-        <rule n="2">每个阶段产物必须保存后才能进入下一阶段</rule>
-        <rule n="3">状态文件 workflow-status.yaml 在每次阶段转换时必须更新</rule>
-        <rule n="4">Human-Review 触发时立即暂停，输出通知并等待人工指令</rule>
-    </WORKFLOW-RULES>
-
+<core-rules-dsl-reference id="mobile-qa/core-rules-dsl-reference.xml" name="Mobile QA Workflow · DSL Reference">
+    <!--
+      v4.2 PR-7 / O23 / D-AGG-1：可编辑源 #2（DSL reference 子集）。
+      ── 收录 ──
+        · <supported-tags>            所有 DSL 标签 + <available-agents> 长表
+        · <input-protocol>            step-pause 输入协议（嵌套于 step-pause 标签内）
+      ── 不收录（→ core-rules-essential.xml）──
+        · <llm> / <agent-taxonomy> / <WORKFLOW-RULES>
+        · <workflow-result-protocol> / <human-review-protocol>
+      ── 聚合契约（D-AGG-1）──
+        · 本文件 body（去掉外层 <core-rules-dsl-reference> 根）会被
+          scripts/sync-core-rules-aggregate.py 注入到 core-rules-essential.xml 的
+          <!- - AGG-INSERT: core-rules-dsl-reference.xml - -> 占位处，
+          再聚合为 core/core-rules.xml（生成产物）。
+      ── 与 SubAgent 子集的关系（O25）──
+        · core-rules-subagent.xml 是本文件的极简裁剪（仅保留 SubAgent 在 invoke-subagent
+          黑盒透传时所必需的 step / check / load / action / template-output / phase-abort 等标签
+          及对应的 input-protocol / mandate）；DSL 长表（available-agents 等）不复制给 SubAgent。
+    -->
     <supported-tags desc="Mobile QA Workflow 支持的标签">
         <!--
           标签白名单边界声明（v4.1 / D3）：
@@ -251,46 +234,4 @@
             </tag>
         </execution>
     </supported-tags>
-
-    <workflow-result-protocol critical="true">
-        <rule>
-            current_phase_result 是 phase 执行期的运行时变量（不入 workflow-status.yaml schema，
-            决定 D1）。phase 早退（含 ABORT、RCA-LowConfidence、Curation-Failed、Non-Bug 等）
-            必须在返回编排器之前显式写入：
-              &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt;
-            编排器读取规则：在同一执行轮次内读取 current_phase_result；若未显式赋值则视作正常完成
-            （current_phase_result = OK），将本 phase 追加到 workflow_status.stepsCompleted。
-        </rule>
-        <rule>
-            phase 早退点位（v4.1 主链路）：
-              · phases/p2-spec-definition.md：Non-Bug 早退（PR-3） / Context-Curating / Curation-Failed
-              · phases/p3-root-cause.md：4 处早退点（PR-4，含 RCA-LowConfidence 等）
-              · phases/p6-verification.md：1 处失败回流早退点（PR-4）
-            上述 5+ 处必须在 PR-3/PR-4 内补齐 &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt; 标记。
-        </rule>
-        <rule>
-            禁止把 current_phase_result 写入 core/workflow-status-template.yaml；
-            禁止在 phase 文件外（如 agents/templates）引用该变量；
-            禁止在 SKILL.md / system-prompt.md / PLATFORM-GUIDE.md 的"最少持久化字段"列表中收录该字段。
-        </rule>
-    </workflow-result-protocol>
-
-    <human-review-protocol critical="true">
-        <rule>以下任一条件触发时，立即输出 Human-Review 通知并暂停工作流：</rule>
-        <trigger n="1">多 Agent 对抗完全发散，Arbiter 执行强制降级裁定</trigger>
-        <trigger n="2">最终置信度 &lt; 0.5 且补充上下文后仍无改善</trigger>
-        <trigger n="3">客户端-服务端边界判定：双方均符合契约但结果不对</trigger>
-        <trigger n="4">Spec 存在多种解读且影响修复方向</trigger>
-        <trigger n="5">静态微验证超过 3 轮仍失败</trigger>
-        <trigger n="6">Non-Bug 回流超过 2 次</trigger>
-        <trigger n="7">专项子工作流置信度 &lt; 0.5 且无法进一步收敛</trigger>
-        <output-format>
-⚠️ [Human-Review Required]
-Issue: {issue_id}
-触发原因: {trigger_reason}
-当前状态快照: {state_summary}
-建议人工处理方向: {suggestion}
-恢复指令: 人工处理完成后，请告知继续的阶段和新信息。
-        </output-format>
-    </human-review-protocol>
-</core-rules>
+</core-rules-dsl-reference>

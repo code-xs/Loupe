@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  v4.2 PR-7 / O25 / §2.2 / §3.5 — SubAgent 专用轻量规则
+  ============================================================
+  适用面（仅 Full 平台 / `env_subagent=true`）：
+    · phases/{p3,p4,p5}.md 与 functionality-deep-dive/phases/{f1..f5}.md
+      的 invoke-subagent.subagent_prompt 内必须以
+      `<load target=".../core/core-rules-subagent.xml" .../>`
+      替代对完整 core-rules.xml 的 load。
+    · Limited 平台（`env_subagent=false`）由 build-system-prompt.py
+      在 system-prompt.md 内嵌等价文本块（见 §2.2 GEN-PR7 第 3 条）。
+      Limited 不复制本文件全文，亦不视作 O25 收益面。
+
+  与全量 core-rules.xml 的差集（D-AGG-1 输出）：
+    收录（≈ 25 行规则）：
+      · <subagent-context>      — 子对话隔离 / 输入约定 / 缺字段错误协议
+      · <subagent-output-protocol> — 输出形态 / 置信度量化 / 宏调用边界
+    不收录（由父对话承担，不应进入子 Agent token）：
+      · <agent-taxonomy>           — 编排层视角的 Agent 全集分类
+      · <WORKFLOW-RULES>           — 编排顺序 / phase 依赖 / state 机
+      · <supported-tags>           — 含 step-pause / phase-abort / phase-complete
+                                     宏的完整 schema、available-agents 表、
+                                     input-protocol 等
+      · <human-review-protocol>    — 7 个触发条件由父编排器统一观测
+
+  CI 守门：
+    · sync-core-rules-aggregate.py 不聚合本文件（独立维护）；本文件改动
+      不影响 core-rules.xml AUTOGEN 产物，但仍受 check-load-targets.sh
+      (Check 18 / GEN-PR7) 路径可达性守门。
+-->
+<core-rules-subagent id="mobile-qa/core-rules-subagent.xml" name="Mobile QA Workflow · SubAgent Lightweight Rules">
+
+    <subagent-context critical="true">
+        <rule>本上下文为子对话隔离 SubAgent，仅承担一次同步任务；禁止跨轮发起 step-pause、phase-abort、phase-complete 或对外部用户提问。</rule>
+        <rule>所有外部状态（{workflow_status} / {spec_file} / {context_bundle} / {issue_card} 等）必须由调用方在 prompt 中显式传入；不得自行读写父对话的状态文件或 ADR / 历史记录。</rule>
+        <rule>角色定义、推理链规范、平台清单、契约校验表等领域知识必须按 prompt 内显式 &lt;load&gt; 指令加载；禁止从其他 SubAgent 输出、历史会话或常识推断领域知识。</rule>
+        <rule>遇到 prompt 必填字段缺失（如 confidence_input、target_list、scene、dimension_set 等）时，立即返回结构化错误 {"status": "abort", "reason": "missing_required_field", "missing": [...]}，不臆造默认值，不静默继续。</rule>
+        <rule>子对话内 token 预算有限：禁止一次性加载未在 prompt 中显式声明的额外 reference 文件；禁止加载完整 core-rules.xml（已由本文件替代）。</rule>
+    </subagent-context>
+
+    <subagent-output-protocol critical="true">
+        <rule>SubAgent 输出必须是结构化文本（YAML / JSON / Markdown 表格之一，按 role 文件 schema 决定），单次返回，禁止流式追问，禁止跨轮累积。</rule>
+        <rule>所有结论必须附带置信度量化字段（参见 reasoning-chain-core.md「置信度计算规则」）：A/B/C × Live/Suspect/Dead 二维证据 → 单假设 base_score → 综合 final_confidence → 映射 High (≥0.8) / Medium (0.5~0.8) / Low (&lt;0.5)。</rule>
+        <rule>低置信度输出（final_confidence &lt; 0.5）必须显式标注 confidence_low_reason 字段，由父编排器决定 fallback 路径（升级 fanout_mode / 触发 human-review-protocol）。</rule>
+        <rule>禁止在 SubAgent 输出里直接调用 phase-abort / phase-complete / step-pause 宏；上述宏仅父编排器在 phase 主流程中有权使用。子 Agent 通过返回结构化字段（status / next_action_hint / human_review_required）传递信号。</rule>
+        <rule>禁止在 SubAgent 输出里发起对其他 SubAgent 的 invoke-subagent 嵌套调用；fan-out / 对抗 / 仲裁等多角色调度由父编排器在 phase step 之间统一编排。</rule>
+        <rule>输出必须以最小可消费形态返回——结论 + 证据引用 + 置信度三件套，禁止粘贴大段未消化的源代码 / 日志，节省父对话 token。</rule>
+    </subagent-output-protocol>
+
+</core-rules-subagent>

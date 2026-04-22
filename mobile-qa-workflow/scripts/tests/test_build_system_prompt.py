@@ -138,7 +138,9 @@ class TestLayeredMode(unittest.TestCase):
                     "L2-phase-logic.md",
                     "L3-reasoning-toolbox.md",
                     "L4-platform-knowledge.md",
+                    "L5-subagent-inline-block.md",
                 ],
+                msg="v4.2 PR-7 / GEN-PR7：layered 应包含 6 个分层产物（新增 L5）",
             )
 
 
@@ -254,6 +256,96 @@ class TestGenD3Increments(unittest.TestCase):
         )
         self.assertIn("Fix-Confirming", enum)
         self.assertGreaterEqual(len(enum), 15, f"v4.2 完整集合 应≥15 项，实际 {len(enum)}")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# v4.2 PR-7 / GEN-PR7 单测增量（L5 SubAgent 等价内联块）
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestGenPR7L5SubagentInline(unittest.TestCase):
+    """GEN-PR7 §4 第 3 条 / §2.2：L5 段必须从 core/core-rules-subagent.xml 同源抽取。"""
+
+    def test_l5_extracts_subagent_context_block(self):
+        text = build_module.build_l5_subagent_inline_block(WORKFLOW_ROOT)
+        self.assertIn("# L5 · Limited 平台 SubAgent 等价内联块", text)
+        self.assertIn("subagent-context", text)
+        self.assertIn("子对话隔离 SubAgent", text)
+        self.assertIn("missing_required_field", text)
+
+    def test_l5_extracts_subagent_output_protocol_block(self):
+        text = build_module.build_l5_subagent_inline_block(WORKFLOW_ROOT)
+        self.assertIn("subagent-output-protocol", text)
+        self.assertIn("置信度", text)
+        self.assertIn("phase-abort", text)
+        self.assertIn("invoke-subagent", text)
+
+    def test_l5_emits_xml_code_blocks(self):
+        text = build_module.build_l5_subagent_inline_block(WORKFLOW_ROOT)
+        self.assertIn("```xml", text)
+        self.assertIn("</subagent-context>", text)
+        self.assertIn("</subagent-output-protocol>", text)
+
+    def test_l5_handles_missing_source_gracefully(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp_root = Path(td) / "mobile-qa-workflow"
+            shutil.copytree(WORKFLOW_ROOT, tmp_root)
+            (tmp_root / "core" / "core-rules-subagent.xml").unlink()
+            text = build_module.build_l5_subagent_inline_block(tmp_root)
+            self.assertIn("L5", text)
+            self.assertIn("缺失", text)
+
+    def test_full_mode_includes_l5_section(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "preview.md"
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--mode=full", "--output", str(target)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            content = target.read_text(encoding="utf-8")
+            self.assertIn("# L5 · Limited 平台 SubAgent 等价内联块", content)
+            self.assertIn("</subagent-output-protocol>", content)
+
+    def test_layered_emits_l5_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            outdir = Path(td) / "layered"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--mode=layered",
+                    "--output-dir",
+                    str(outdir),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=f"stderr: {result.stderr}")
+            l5 = outdir / "L5-subagent-inline-block.md"
+            self.assertTrue(l5.exists())
+            body = l5.read_text(encoding="utf-8")
+            self.assertIn("subagent-context", body)
+            self.assertIn("subagent-output-protocol", body)
+
+    def test_l5_source_is_subagent_xml_not_full_core_rules(self):
+        """O25 关键约束：L5 必须从 subagent.xml 抽取，禁止把完整 core-rules.xml 文本嵌入。"""
+        text = build_module.build_l5_subagent_inline_block(WORKFLOW_ROOT)
+        self.assertNotIn("<WORKFLOW-RULES>", text, "L5 不应嵌入 WORKFLOW-RULES（编排层）")
+        self.assertNotIn("<agent-taxonomy>", text, "L5 不应嵌入 agent-taxonomy（编排层）")
+        self.assertNotIn("<available-agents>", text, "L5 不应嵌入 available-agents 表（编排层）")
+        self.assertNotIn("<human-review-protocol>", text, "L5 不应嵌入 human-review-protocol（父对话）")
+
+
+class TestGenPR7AutogenHeader(unittest.TestCase):
+    """GEN-PR7：AUTOGEN 头必须列出 D-AGG-1 / D-AGG-2 / O25 三个新增源。"""
+
+    def test_autogen_header_lists_pr7_sources(self):
+        text = build_module.build_header_block(WORKFLOW_ROOT)
+        self.assertIn("D-AGG-1", text, "AUTOGEN 头应标注 core-rules.xml 是 D-AGG-1 聚合产物")
+        self.assertIn("D-AGG-2", text, "AUTOGEN 头应标注 reasoning-chain.md 是 D-AGG-2 聚合产物")
+        self.assertIn("core-rules-subagent.xml", text, "AUTOGEN 头应列出 O25 新增源")
 
 
 if __name__ == "__main__":

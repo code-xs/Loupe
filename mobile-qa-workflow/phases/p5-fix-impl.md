@@ -82,7 +82,7 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
     <step n="5" goal="调用 Coder SubAgent">
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="coder-agent" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml'
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml'
                       prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/agents/coder-agent.md'
                       prompt='加载角色定义'/>

@@ -9,25 +9,18 @@
 - `supporting_context`: 引用的 Spec、RCA、Fix Design、专项报告或验证结论
 - `confidence_input`: 被质疑对象原始置信度或原始评分
 
-## 入参完整性校验（v4.1 / C2 wrapper）
+## 入参完整性校验（v4.2 PR-7 / O19+ / shared-input-guard）
 
-> 本节为 C2 修复的 wrapper 端实现：调用方（PR-4 P3/P4 已落地）必须在 invoke 前注入
-> `confidence_input`；若 wrapper 在执行前检测到该入参缺失或类型非数值，必须**立即停止推理**
-> 并输出标准化错误标签。与 `agents/shared-arbiter-base.md` 同构。
+> v4.2 PR-7 / O19+ / §3.6：本段从原 v4.1 / C2 wrapper 文本抽取至
+> [`agents/shared-input-guard.md`](./shared-input-guard.md)，与
+> `shared-arbiter-base.md` 通过单一参数 `required_field` 同源复用，避免双写漂移。
+>
+> **本 wrapper 写死 `required_field = confidence_input`**（被质疑对象原始置信度，
+> OVHSC SCORE 步产物）。除 `confidence_input` 外的其它入参缺失（`scene` /
+> `dimension_set` / `target_list` / `supporting_context`）按 v4.1 范围口径 D5
+> 暂**不**视为 Schema-Violation。
 
-执行任何"统一执行协议"步骤之前，必须按以下顺序自检入参：
-
-1. 若 `confidence_input` 缺失（未提供 / 为 null / 为空字符串）：
-   - 输出固定文本：`[Schema-Violation: missing confidence_input]`
-   - 不再继续后续推理；不产出 `## Challenge Report` 任何字段
-2. 若 `confidence_input` 存在但非数值：
-   - 输出固定文本：`[Schema-Violation: invalid confidence_input type]`
-   - 不再继续后续推理
-3. `scene` / `dimension_set` / `target_list` / `supporting_context` 缺失暂不视为
-   Schema-Violation（v4.1 范围口径 D5）
-
-> **校验失败的语义**：`[Schema-Violation: missing confidence_input]` 是调用方契约错误，
-> 不是质疑不确定；不应转为 `[No Issue Found]` 或 Human-Review；调用方必须修复后重试。
+<load target="mobile-qa-workflow/agents/shared-input-guard.md" prompt="加载 wrapper 入参完整性校验通用契约（required_field=confidence_input）"/>
 
 ## 统一执行协议
 1. 逐个目标执行系统性质疑，不得跳过维度。

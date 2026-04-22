@@ -26,7 +26,7 @@ description: Stage 4 — 隔离诊断与专项收敛，使用专项复合角色�
     <step n="2" goal="隔离诊断与候选排序">
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="deep-dive-race-and-isolation-analyst" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/agents/deep-dive-race-and-isolation-analyst.md' prompt='加载角色定义'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/reference/isolation-patterns.md' prompt='加载隔离诊断模式参考'/>
                 mode = isolation-debate
@@ -41,7 +41,7 @@ description: Stage 4 — 隔离诊断与专项收敛，使用专项复合角色�
         <action>初始化 debate_round = 1</action>
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="deep-dive-arbiter" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/agents/shared-challenger-base.md' prompt='加载共享 challenger 基座'/>
                 <load target='mobile-qa-workflow/agents/shared-arbiter-base.md' prompt='加载共享 arbiter 基座'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/agents/deep-dive-arbiter.md' prompt='加载专项收敛角色'/>

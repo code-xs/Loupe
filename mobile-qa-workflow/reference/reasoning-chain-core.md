@@ -1,23 +1,28 @@
-<!--
-  ============================================================
-  AUTOGEN — DO NOT EDIT
-  Sources:
-    · reference/reasoning-chain-core.md             (skeleton + insertion marker)
-    · reference/reasoning-guide-functional.md       (inject #1)
-    · reference/reasoning-guide-ui.md               (inject #2)
-    · reference/reasoning-guide-network.md          (inject #3)
-    · reference/reasoning-guide-compat.md           (inject #4)
-  Generator: scripts/sync-reasoning-chain-aggregate.py (v4.2 PR-7 / O24 / D-AGG-2 / C1)
-  本文件由聚合脚本生成；任何手改将被 CI Check 20 (sync-reasoning-chain-aggregate)
-  以及 Check 10 (system-prompt-sync 间接) 拦截。
-  编辑请改 5 个源文件之一，然后运行：
-    python3 mobile-qa-workflow/scripts/sync-reasoning-chain-aggregate.py --write
-  ============================================================
--->
-
 # OVHSC 结构化推理链规范
 
 无论走快速路径还是深度路径，每个分析 Agent/视角都必须遵循以下五步结构化推理链。这是保证归因质量的核心规范。
+
+<!--
+  v4.2 PR-7 / O24 / R24-1：可编辑源 #1（core 子集 / OVHSC 不可触动）。
+  ── 收录 ──
+    · 顶部标题与导语
+    · 推理链五步骤
+    · 推理链输出格式
+    · 置信度计算规则
+    · 分类专项推理引导 章节头（占位，正文由 4 个 guide 注入）
+  ── 不收录（→ reasoning-guide-{functional,ui,network,compat}.md）──
+    · 4 类专项推理引导（功能 / UI / 网络 / 兼容）
+  ── 聚合契约（D-AGG-2）──
+    · 唯一占位标记 <!- - AGG-INSERT-GUIDES - -> 由
+      scripts/sync-reasoning-chain-aggregate.py 按 functional / ui / network / compat
+      固定顺序替换为 4 个 guide 的 inject body，写到聚合产物
+      reference/reasoning-chain.md（PR-7 起 reasoning-chain.md = 生成产物，禁止手改）。
+  ── 出口 ──
+    · phases/p3-root-cause.md step 5 起点 / invoke-subagent 内部按 R24-1 算法分类加载：
+        命中 → load reasoning-chain-core.md + 单 guide
+        未命中 → load reasoning-chain-core.md + 4 guides Fallback-Full
+      （C1 选项保留聚合产物 reasoning-chain.md 作为"全量便捷加载"备选）。
+-->
 
 ## 推理链五步骤
 
@@ -133,82 +138,4 @@
 
 ## 分类专项推理引导
 
-### 功能类问题
-
-**OBSERVE 阶段重点**:
-- 将"功能不正常"分解为具体的数据/状态偏差点
-- 对照 Spec 中的 I/O Mapping，逐条标注哪些输出不符
-- 对照状态转换图，定位状态偏离发生在哪个转换上
-- 在数据流关键节点逐点检查，定位数据首次偏离的位置
-
-**HYPOTHESIZE 阶段重点**:
-- 优先考虑: 条件分支遗漏/边界值处理缺失/状态机跳转丢失/异步回调时序
-- 必须检查: 服务端数据是否符合预期（排除前端接了脏数据的可能）
-- 必须检查: Feature Flag / AB 实验配置是否影响了行为
-
-**VERIFY 阶段重点**:
-- 关键验证手段: 在数据流每个节点打桩检查数据是否符合预期
-- 反事实: 如果假设成立，相同操作路径下不同输入是否也会异常？
-- 边界: 改变输入为边界值，行为是否符合假设预测？
-
-### UI/UX 类问题
-
-**OBSERVE 阶段重点**:
-- 精确标注视觉差异: 位置偏移(px/dp)、尺寸错误、颜色/字号不匹配、间距异常
-- 区分静态渲染问题 vs 动态布局问题（数据加载后才出现）
-- 区分全局问题（所有页面）vs 局部问题（特定页面/组件）
-- 检查 Layout Inspector/View Debugger 中的实际约束值
-
-**HYPOTHESIZE 阶段重点**:
-- 优先考虑: 硬编码数值/约束缺失/约束冲突/资源适配不全(mdpi/hdpi/...)
-- 动态问题优先考虑: 异步数据回来后的布局更新时机/measure-layout 循环
-- 适配问题优先考虑: 安全区域计算/状态栏/导航栏高度/折叠屏状态
-- Android 特有: dp/sp/px 转换 / ConstraintLayout barrier/guideline
-- iOS 特有: safeAreaInsets / intrinsicContentSize / Auto Layout 优先级
-
-**VERIFY 阶段重点**:
-- 关键验证手段: 在多种屏幕尺寸/密度下复现对比
-- 反事实: 如果是约束X导致的问题，修改该约束后布局是否正常？
-- 对照: 问题元素在其他页面的同类使用是否也有问题？
-
-### 网络类问题
-
-**OBSERVE 阶段重点**:
-- 完整记录: 请求URL/Method/Headers/Body → 响应Code/Headers/Body/耗时
-- 区分: 请求未发出/请求发出但无响应/响应已收到但解析失败/解析成功但业务处理失败
-- 对比: 同一请求在正常/异常环境下的差异
-- 时间线: 多个相关请求的发出和响应时序
-
-**HYPOTHESIZE 阶段重点**:
-- 按错误处理链逐层检查: 网络层 → 协议层 → 解析层 → 业务层 → 展示层
-- 客户端 vs 服务端归属判定:
-  - 服务端返回错误码 → 优先怀疑服务端/请求参数
-  - 客户端超时但服务端日志正常 → 怀疑网络环境/客户端超时配置
-  - 数据不一致 → 同时检查客户端缓存策略和服务端数据
-- 必须检查: 请求参数拼装是否正确（尤其动态参数/签名/token过期）
-- 必须检查: 是否有请求拦截器/中间件修改了请求或响应
-
-**VERIFY 阶段重点**:
-- 关键验证手段: 用相同参数直接调 API (curl/Postman) 对比结果
-- 抓包: 对比客户端实际发出的请求 vs 代码中构造的请求
-- 反事实: 如果是服务端问题，其他客户端(Web/其他版本)是否也有同样问题？
-
-### 兼容性类问题
-
-**OBSERVE 阶段重点**:
-- 精确的设备差异对比: 问题设备 vs 正常设备的参数逐项比对
-- 确认问题的"设备边界": 同品牌不同型号？同OS不同版本？同版本不同品牌？
-- 检查是否与厂商定制行为相关（权限管理/后台限制/通知策略）
-
-**HYPOTHESIZE 阶段重点**:
-- API 可用性: 使用了高版本 API 但未做版本检查/降级？
-- 厂商差异: 厂商ROM修改了标准行为（常见于通知/后台/权限/存储）？
-- 硬件差异: GPU渲染差异/摄像头API差异/传感器精度差异？
-- SDK 冲突: 不同 SDK 版本间的二进制兼容性/资源冲突/初始化顺序？
-- Android 碎片化: targetSdkVersion 升级带来的行为变更？
-- iOS 版本: 系统行为变更（如 iOS 隐私策略/后台模式/推送机制迭代）？
-
-**VERIFY 阶段重点**:
-- 关键验证手段: 在问题设备上用条件编译/动态配置绕过可疑代码
-- 反事实: 如果是 API X 的兼容性问题，是否只有使用了 API X 的功能受影响？
-- 对照: 同一设备上的其他 App 是否有类似问题？（区分App问题和系统问题）
+<!-- AGG-INSERT-GUIDES -->

@@ -24,7 +24,7 @@ description: Stage 1 — 环境与上下文重构，识别导致偶发功能异�
     <step n="2" goal="执行环境与上下文重构">
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="deep-dive-context-analyst" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/agents/deep-dive-context-analyst.md' prompt='加载角色定义'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/reference/environment-factor-thresholds.md' prompt='加载环境因子阈值参考'/>
                 重建环境因子、前后台切换、权限变更、系统资源回收、配置漂移，并输出环境基线与热点代码关联。"/>
@@ -35,12 +35,12 @@ description: Stage 1 — 环境与上下文重构，识别导致偶发功能异�
     </step>
 
     <step n="3" goal="按需输出独立报告">
-        <check if="emit_environment_factor_report == true">
+        <check if="deep_dive_optional_artifacts.environment_factor_report == true">
             <template-output file="{output_file}" template="mobile-qa-workflow/functionality-deep-dive/templates/environment-factor-report.md"/>
             <action>更新 {config_source}：output_environment_factor_report = {output_file}</action>
             <action>更新 {workflow_status}：current_state = DD-InProgress, artifacts += [environment-factor-report.md]</action>
         </check>
-        <check if="emit_environment_factor_report != true">
+        <check if="deep_dive_optional_artifacts.environment_factor_report != true">
             <action>将环境因子内容保留供 F4 回注到 RCA 附录，不强制独立落盘。</action>
             <action>更新 {workflow_status}：current_state = DD-InProgress</action>
         </check>

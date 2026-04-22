@@ -23,7 +23,7 @@ description: Stage 3 — 时序对齐与竞态剖析
     <step n="2" goal="建立统一时间轴与竞态扫描">
         <check if="{env_subagent} == true">
             <invoke-subagent subagent_type="deep-dive-race-and-isolation-analyst" subagent_prompt="
-                <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/agents/deep-dive-race-and-isolation-analyst.md' prompt='加载角色定义'/>
                 <load target='mobile-qa-workflow/functionality-deep-dive/reference/race-condition-patterns.md' prompt='加载竞态条件常见模式参考'/>
                 mode = temporal-correlation
@@ -35,12 +35,12 @@ description: Stage 3 — 时序对齐与竞态剖析
     </step>
 
     <step n="3" goal="按需输出独立报告">
-        <check if="emit_concurrency_report == true">
+        <check if="deep_dive_optional_artifacts.concurrency_analysis_report == true">
             <template-output file="{output_file}" template="mobile-qa-workflow/functionality-deep-dive/templates/concurrency-analysis-report.md"/>
             <action>更新 {config_source}：output_concurrency_report = {output_file}</action>
             <action>更新 {workflow_status}：current_state = DD-InProgress, artifacts += [concurrency-analysis-report.md]</action>
         </check>
-        <check if="emit_concurrency_report != true">
+        <check if="deep_dive_optional_artifacts.concurrency_analysis_report != true">
             <action>将并发分析内容保留供 F4 回注到 RCA 附录，不强制独立落盘。</action>
             <action>更新 {workflow_status}：current_state = DD-InProgress</action>
         </check>

@@ -5,12 +5,13 @@
 分层产物。本脚本是"最小完整实现"（v1.1 review Major 3 修订口径）：5 个 builder
 全部可跑、三种 mode 全部可跑，禁止 NotImplementedError stub。
 
-目标产物结构（与 V1.1 §3.3.17 Stage 2 表对齐）：
+目标产物结构（与 V1.1 §3.3.17 Stage 2 表对齐 + v4.2 PR-7 / O25 / §2.2 GEN-PR7 #3 增量）：
   L0: 核心身份（角色定义 + 6 阶段序列 + 状态机转换图）
-  L1: 执行规则（步骤顺序 + ABORT 协议 + step-pause 输入规范）
+  L1: 执行规则（步骤顺序 + ABORT 协议 + step-pause 输入规范） — 读 D-AGG-1 聚合产物 core-rules.xml
   L2: 当前阶段逻辑（按 current_state 动态展开；默认全量 6 阶段）
-  L3: 推理工具箱（OVHSC 五步 + 置信度公式 + Challenger 维度 + Arbiter）
+  L3: 推理工具箱（OVHSC 五步 + 置信度公式 + Challenger 维度 + Arbiter） — 读 D-AGG-2 聚合产物 reasoning-chain.md（C1 全量）
   L4: 平台知识（按命中分类注入，全量时输出 Android + iOS 两段）
+  L5: Limited 平台 SubAgent 等价内联块（v4.2 PR-7 / O25 新增）— 与 core/core-rules-subagent.xml 同源
 
 输出策略：
   - --mode=full        生成 Limited 平台单 prompt 模式产物（L0+L1+L2 全量+L3+L4 全量）
@@ -28,6 +29,17 @@ v4.2 PR-6（GEN-D1/D2/D3）：
   - GEN-D2：新增 _build_routing_table 注入 step-pause-registry 路由表（与 SCRIPT-D2 三元组对账闭环）
   - GEN-D3：单测增量 + ENUM_BLOCK_REGEX 升级为 v4.[12] 兼容
   - SP-N1：首次自动构建并替换 system-prompt.md（解 H1 / 用 ALLOW_FIRST_BUILD=1 解锁）
+
+v4.2 PR-7（GEN-PR7）：
+  - L1 / L3 上游已切换为 D-AGG-1 / D-AGG-2 聚合产物（core-rules.xml / reasoning-chain.md），
+    抽取 regex 锚点字面不变（## 推理链五步骤 / ## 推理链输出格式 / ## 置信度计算规则
+    / <WORKFLOW-RULES> / <input-protocol> / <workflow-result-protocol>），
+    GEN-PR7 不需要改 L1/L3 抽取逻辑，保持单测全绿。
+  - 新增 build_l5_subagent_inline_block：从 core/core-rules-subagent.xml 抽取
+    <subagent-context> + <subagent-output-protocol> 两段，渲染为 Limited 平台
+    内嵌的 SubAgent 等价文本块（§2.2 / GEN-PR7 #3）。Full 平台不依赖此块。
+  - LAYERED_FILES 增至 6 个（新增 L5-subagent-inline-block.md）；--mode=full 输出
+    在 L4 之后追加 L5 段，AUTOGEN 头同步标注 source = core/core-rules-subagent.xml。
 """
 from __future__ import annotations
 
@@ -146,15 +158,17 @@ def build_header_block(workflow_root: Path = WORKFLOW_ROOT) -> str:
         "<!--\n"
         "========================================================================\n"
         "AUTOGEN-FROM:\n"
-        "  core/core-rules.xml\n"
+        "  core/core-rules.xml          (D-AGG-1 聚合产物 / 由 sync-core-rules-aggregate.py 维护)\n"
+        "  core/core-rules-subagent.xml (v4.2 PR-7 / O25 / Limited 内联 L5 段)\n"
         "  core/workflow.xml\n"
         "  core/workflow-status-template.yaml\n"
         "  core/default-config.yaml\n"
         "  core/workflow-model.yaml\n"
         "  core/step-pause-registry.yaml\n"
+        "  reference/reasoning-chain.md (D-AGG-2 聚合产物 / 由 sync-reasoning-chain-aggregate.py 维护)\n"
         "\n"
         "@ schema_version=4\n"
-        "@ sync-check=2026-04-22（PR-6 首次自动构建基线）\n"
+        "@ sync-check=2026-04-22（PR-7 / GEN-PR7 / L5 SubAgent 等价内联块加入基线）\n"
         "@ build-cmd=ALLOW_FIRST_BUILD=1 python3 scripts/build-system-prompt.py --mode=full --output=system-prompt.md\n"
         "\n"
         "✅ 本文件由 `scripts/build-system-prompt.py` 自动构建；任何手改将被 CI Check 14\n"
@@ -394,6 +408,67 @@ def build_l3_reasoning_toolbox(workflow_root: Path = WORKFLOW_ROOT) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# L5: Limited 平台 SubAgent 等价内联块（v4.2 PR-7 / O25 / §2.2 GEN-PR7 #3）
+# ──────────────────────────────────────────────────────────────────────
+
+def build_l5_subagent_inline_block(workflow_root: Path = WORKFLOW_ROOT) -> str:
+    """L5：从 core/core-rules-subagent.xml 抽取 <subagent-context> + <subagent-output-protocol>
+    两段，渲染为 Limited 平台 (env_subagent=false) 内嵌的 SubAgent 等价文本块。
+
+    立法依据（构建计划 §2.2 / GEN-PR7 §4 第 3 条）：
+      - Full 平台 invoke-subagent 已通过 <load core-rules-subagent.xml> 获得本契约
+        （O25 完成 / Check 21 守门）。
+      - Limited 平台无 invoke-subagent 能力，主对话内联模拟 SubAgent 角色时，
+        必须从同一源 (core-rules-subagent.xml) 抽取等价文本块嵌入 system-prompt.md，
+        禁止再嵌一整份主编排用 core-rules.xml（v1.1 §9.2 范围限定）。
+      - 本 L5 与 core-rules-subagent.xml 同源 → O25 token 收益对 Limited 不双计
+        （§2.2 / §2.3 Token DoD 口径：Full = O25 直接收益；Limited = L1/整 prompt
+        before/after 的间接节身，不入 O25 单项）。
+    """
+    path = workflow_root / "core" / "core-rules-subagent.xml"
+    if not path.is_file():
+        return (
+            "# L5 · Limited 平台 SubAgent 等价内联块\n\n"
+            "(缺失 core/core-rules-subagent.xml — 请检查 O25 是否落地)\n"
+        )
+    text = _read(path)
+
+    context_block = _extract_section(
+        text, r"^\s*<subagent-context\b[^>]*>", r"^\s*</subagent-context>"
+    )
+    protocol_block = _extract_section(
+        text,
+        r"^\s*<subagent-output-protocol\b[^>]*>",
+        r"^\s*</subagent-output-protocol>",
+    )
+
+    parts = [
+        "# L5 · Limited 平台 SubAgent 等价内联块（v4.2 PR-7 / O25 / §2.2）\n",
+        "> **适用面**：Limited 平台 (`env_subagent=false`)，主对话内联模拟 Coder /\n"
+        "> Investigator / Challenger / Arbiter / Fix-Proposer 等 SubAgent 角色时\n"
+        "> 必须遵守的最小契约。**与 `core/core-rules-subagent.xml` 同源**\n"
+        "> （由 `build-system-prompt.py` 抽取注入），不双计为 O25 单项收益。\n"
+        ">\n"
+        "> **何时进入本块**：phase 文件内出现 `<check if=\"{env_subagent} == false\">`\n"
+        "> + `<action>【降级模式：主 Agent 内联执行 ...】` 形态时，主对话即「假装」自己\n"
+        "> 是被调子 Agent，需先在心智上读完本块再开始扮演。\n",
+    ]
+    if context_block:
+        parts.append(
+            "## SubAgent 上下文契约（subagent-context）\n\n"
+            "```xml\n" + context_block.strip() + "\n</subagent-context>\n```\n"
+        )
+    if protocol_block:
+        parts.append(
+            "## SubAgent 输出协议（subagent-output-protocol）\n\n"
+            "```xml\n"
+            + protocol_block.strip()
+            + "\n</subagent-output-protocol>\n```\n"
+        )
+    return "\n".join(parts)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # L4: 平台知识
 # ──────────────────────────────────────────────────────────────────────
 
@@ -499,6 +574,7 @@ LAYERED_FILES = [
     ("L2-phase-logic.md", build_l2_phase_logic),
     ("L3-reasoning-toolbox.md", build_l3_reasoning_toolbox),
     ("L4-platform-knowledge.md", build_l4_platform_knowledge),
+    ("L5-subagent-inline-block.md", build_l5_subagent_inline_block),
 ]
 
 
@@ -557,6 +633,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 build_l2_phase_logic(wfr, args.phase),
                 build_l3_reasoning_toolbox(wfr),
                 build_l4_platform_knowledge(wfr, args.category),
+                build_l5_subagent_inline_block(wfr),
             ]
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)

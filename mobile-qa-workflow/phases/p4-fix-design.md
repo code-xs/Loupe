@@ -41,7 +41,7 @@
             <check if="fix_strategy_mode == single-proposer">
                 <check if="{env_subagent} == true">
                     <invoke-subagent subagent_type="fix-proposer" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/fix-proposer.md' prompt='加载角色定义'/>
                         <load target='mobile-qa-workflow/reference/fix-strategies.md' prompt='加载修复策略知识库'/>
                         [Single-Proposer] 基于 {rca_report}、{spec_file}、{issue_card}、{config_source} 输出单方案设计，完成四重论证与回归测试设计。"/>
@@ -54,12 +54,12 @@
             <check if="fix_strategy_mode == challenged-proposer">
                 <check if="{env_subagent} == true">
                     <invoke-subagent subagent_type="fix-proposer" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/fix-proposer.md' prompt='加载角色定义'/>
                         <load target='mobile-qa-workflow/reference/fix-strategies.md' prompt='加载修复策略知识库'/>
                         [Challenged-Proposer] 基于 {rca_report}、{spec_file}、{issue_card} 独立设计修复方案，完成四重论证与回归测试设计。"/>
                     <invoke-subagent subagent_type="challenger" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/shared-challenger-base.md' prompt='加载共享 challenger 基座'/>
                         <load target='mobile-qa-workflow/agents/challenger.md' prompt='加载主流程 challenger 包装层'/>
                         scene = FIX
@@ -81,17 +81,17 @@
             <check if="fix_strategy_mode == contested-arbitrated">
                 <check if="{env_subagent} == true">
                     <invoke-subagent subagent_type="fix-proposer" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/fix-proposer.md' prompt='加载角色定义'/>
                         <load target='mobile-qa-workflow/reference/fix-strategies.md' prompt='加载修复策略知识库'/>
                         [Proposer-A] 基于 {rca_report}、{spec_file}、{issue_card} 独立设计方案 A，完成全部四重论证。"/>
                     <invoke-subagent subagent_type="fix-proposer" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/fix-proposer.md' prompt='加载角色定义'/>
                         <load target='mobile-qa-workflow/reference/fix-strategies.md' prompt='加载修复策略知识库'/>
                         [Proposer-B] 必须尝试与 A 不同的策略路径，独立设计方案 B，完成全部四重论证。"/>
                     <invoke-subagent subagent_type="challenger" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/shared-challenger-base.md' prompt='加载共享 challenger 基座'/>
                         <load target='mobile-qa-workflow/agents/challenger.md' prompt='加载主流程 challenger 包装层'/>
                         scene = FIX
@@ -101,7 +101,7 @@
                         confidence_input = { rca_final_confidence: {上游 P3 arbiter 的 final_confidence}, fix_proposer_self_confidence: {Proposer-A 自评置信度 + Proposer-B 自评置信度 数组} }
                         输出四重攻击结果。"/>
                     <invoke-subagent subagent_type="arbiter" subagent_prompt="
-                        <load target='mobile-qa-workflow/core/core-rules.xml' prompt='加载流程规范'/>
+                        <load target='mobile-qa-workflow/core/core-rules-subagent.xml' prompt='加载流程规范'/>
                         <load target='mobile-qa-workflow/agents/shared-arbiter-base.md' prompt='加载共享 arbiter 基座'/>
                         <load target='mobile-qa-workflow/agents/arbiter.md' prompt='加载主流程 arbiter 包装层'/>
                         scene = FIX

@@ -7,24 +7,25 @@
 - `deep-dive-arbiter.md`: 吸收专项 challenger + arbiter，负责七维质疑与最终裁定
 - `defensive-fix-architect.md`: 防御性修复附录，按需触发
 
-## 已退役（仅 v3-legacy 会话恢复 / v4.2 PR-1 落地）
+## 已退役（仅用于 v3-legacy 会话恢复）
 
-以下 5 个 agent 在 v4 之后**新会话不再使用**，物理文件已归档至 `archive/v3-legacy/`：
+以下 5 个 agent **新会话不再使用**，仅在恢复旧会话时可能被加载；物理文件已归档至 `archive/v3-legacy/`：
 
 - `context-reconstructor.md`
 - `state-analyst.md`
 - `temporal-analyst.md`
-- `challenger.md`（**v1.1 新增到清单** — deep-dive 子目录下，**不影响**主流程 `mobile-qa-workflow/agents/challenger.md`；当前为 Legacy Wrapper 薄文件）
-- `arbiter.md`（**v1.1 新增到清单** — deep-dive 子目录下，**不影响**主流程 `mobile-qa-workflow/agents/arbiter.md`；当前为 Legacy Wrapper 薄文件）
+- `challenger.md`（deep-dive 子目录下的 legacy wrapper，**不影响**主流程 `mobile-qa-workflow/agents/challenger.md`）
+- `arbiter.md`（deep-dive 子目录下的 legacy wrapper，**不影响**主流程 `mobile-qa-workflow/agents/arbiter.md`）
 
-**退役原因**：deep-dive 子工作流 v4 已收敛为本目录其余 5 个新 agent（详见 README 上半段 + `core/workflow.xml`）。
+**退役原因**：deep-dive 子工作流已收敛为上方“当前复合角色”的 5 个 agent；旧 agent 仅保留用于历史会话恢复。
 
-**v4.3 物理删除前提**（来自 V1.1 §3.1 O3）：
-1. 所有持久化会话的 `schema_version ≥ 4`（CI 守门：`check-state-enum.sh` 兜底）
-2. 90 天内零 v3-legacy 流量（按 `workflow_version=v3-legacy` 与 `legacy_flow_mode=true` 标记的会话计数为 0；**注意**：主流程 `core/workflow.xml` 的 v3 兼容默认值是 `workflow_version = legacy`，与 deep-dive 的 `v3-legacy` 是不同字符串值，统计时需双侧累加；详见本 PR §6 议题 H2）
+**物理删除前提**（用于后续清理 legacy 文件时判定是否安全）：
+1. 所有持久化会话的 `schema_version ≥ 4`（建议由 CI 守门）
+2. 连续 90 天无 v3-legacy 恢复流量（统计应同时覆盖：
+   - deep-dive：`workflow_version=v3-legacy` 且 `legacy_flow_mode=true`
+   - 主流程：`workflow_version=legacy` 的兼容路径）
 3. 主流程与 deep-dive 子流程均无 `<load target="archive/v3-legacy/...">` 残留引用（grep 验证）
 
-**当前状态**（v4.2 PR-1 落地）：
-- 物理文件位置：`functionality-deep-dive/agents/archive/v3-legacy/` 下 5 个 .md
-- DSL 声明位置：主流程 `core/core-rules.xml` L92-96，5 个 `<agent name=... scenario="兼容旧会话">` 元素，文本内容已升级为"已退役（v3-legacy 会话恢复专用 / 详见 ADR-019）；新会话禁用"
-- 物理删除推迟到 v4.3 立项
+**现状**：
+- 物理文件位置：`functionality-deep-dive/agents/archive/v3-legacy/` 下 5 个 `.md`
+- DSL 声明位置：主流程 `core/core-rules.xml` 中标注为“兼容旧会话”的对应 agent

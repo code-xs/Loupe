@@ -1,8 +1,7 @@
 """
 Unit tests for LLMJudge._fallback_parse()
 Covers: new dimension extraction, mixed old/new output, boundary values, missing dimensions.
-
-V3.1: 验证 9 维度正则解析的正确性
+验证 9 维度正则解析的正确性。
 """
 
 import re

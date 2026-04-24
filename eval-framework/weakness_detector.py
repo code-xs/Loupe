@@ -1,8 +1,6 @@
 """
 Loupe AI 自检自测系统 — Weakness Detector (薄弱环节定位)
 分析评估结果，定位低分 Case 类型和 Stage，输出改进优先级。
-
-V3.1: DIMENSIONS 扩展至 9 维度 + 新增 3 维度归因规则
 """
 
 import logging
@@ -52,7 +50,7 @@ class WeaknessDetector:
         "reasoning_depth",
         "artifact_completeness",
         "defensive_fix_quality",
-        # V3.1 新增 3 维度
+        # Extended dimensions (current state)
         "contract_first_pass_accuracy",
         "hallucination_interception",
         "self_healing_rate",
@@ -66,7 +64,7 @@ class WeaknessDetector:
         "F5_defensive_fix",
     ]
 
-    # 维度到改进类型的映射 (V3.1: 新增 3 维度归因规则)
+    # 维度到改进类型的映射（现态口径）
     DIM_TO_IMPROVEMENT = {
         "attribution_accuracy": "prompt",
         "contributing_completeness": "reference",
@@ -74,7 +72,7 @@ class WeaknessDetector:
         "reasoning_depth": "agent",
         "artifact_completeness": "template",
         "defensive_fix_quality": "reference",
-        # V3.1 新增归因
+        # Extended dimension attribution
         "contract_first_pass_accuracy": "agent",       # 溯源准确率低 → 改进 coder-agent 溯源逻辑
         "hallucination_interception": "prompt",         # 幻觉拦截率低 → 强化溯源 prompt 约束
         "self_healing_rate": "architecture",            # 自愈率低 → 改进微验证纠错架构

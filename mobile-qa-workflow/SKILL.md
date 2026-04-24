@@ -21,21 +21,20 @@ description: >-
 
 ## workflow_status 关键字段（v4.1 / `schema_version: 4`）
 
-> 完整权威源见 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml)。下表仅枚举 v4.1 主要新增/变更字段；老字段（`fanout_mode` / `analysis_complexity` / `reroute_target_phase` / `rca_retry_count` 等）保持不变。
+> 完整权威源见 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml)。此处只保留“最小使用者说明”，避免与模板、system-prompt、PLATFORM-GUIDE 形成多处重复维护。
 
 | 字段 | 默认 | 用途 | 引入版本 |
 |---|---|---|---|
 | `schema_version` | `4` | v4.1 schema 升级；旧会话由迁移脚本补齐 | v4.1（v3 → v4） |
 | `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离，承接 `single-proposer` / `challenged-proposer` / `contested-arbitrated`），与 RCA 字段 `fanout_mode` 物理隔离 | v4.1 / v4.2 PR-2 收敛 `fix_strategy_mode` |
-| `phase_history` | `[]` | 阶段执行历史，元素结构：`{phase, timestamp, fanout_mode, note?}`；P3 完成时 append（C10 兼容性方案 A 主路径） | v4.1 |
-| `user_inputs` | `{}` | step-pause 用户回复命名空间容器；编排器 step 4 解析回复后**总是**写入 `user_inputs.<result_field>` | v4.1 |
-| `non_bug_context` | `null` | 最近一次 P2 Non-Bug 判定上下文文本，供编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用；允许在后续会话中被覆盖，非长期业务字段 | v4.1（D17） |
-| `parse_error_count` | `0` | step-pause 连续解析失败熔断计数器；**生命周期**：进入新 step-pause 前清零、解析成功清零、解析失败 +1、累计 ≥ 3 切到 `current_state = Human-Review` 并清零 | v4.1（D18） |
-<!-- v4.2 PR-6 / DOC-D1：顶层 non_bug_user_choice 镜像字段已下线，user_inputs.non_bug_user_choice 单写承接（详见 ADR-015 §6 v4.2 PR-6 修订段）。 -->
+| `phase_history` | `[]` | 阶段执行历史（用于 P3 重入等恢复逻辑） | v4.1 |
+| `user_inputs` | `{}` | step-pause 用户回复命名空间 | v4.1 |
+| `non_bug_context` | `null` | Non-Bug 判定说明（供 step-pause 标题引用） | v4.1 |
+| `parse_error_count` | `0` | step-pause 解析失败熔断计数器 | v4.1 |
 
 > ❌ **不持久化 `current_phase_result`**（D1：运行时变量）。
 >
-> ✅ **`user_inputs` 单写（v4.2 PR-6 起 / D8 + D15 收口）**：所有 step-pause 用户回复**仅写入** `workflow_status.user_inputs.<result_field>`（单写）；顶层镜像字段全部下线。引用方统一用 `{user_inputs.<key>}` 形式（详见 ADR-008 v4.2 PR-6 修订段 + ADR-015 §6）。
+> ✅ **`user_inputs` 单写**：所有 step-pause 用户回复仅写入 `workflow_status.user_inputs.<result_field>`；引用统一用 `{user_inputs.<key>}`。
 >
 > 🔁 **step-pause 输入协议（D2 + D16）**：所有 step-pause 标题最后一行必须形如 `请用 <key>=<value> 回复`；用户回复**首行**含 `<key>=<value>`，`<value>` ∈ `allowed_values` 白名单；解析失败编排器输出 `[parse-error: 期望 <key> ∈ <allowed_values>]` 并重新触发同一 step-pause；连续 3 次失败强制转 Human-Review。
 

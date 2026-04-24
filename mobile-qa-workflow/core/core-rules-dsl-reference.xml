@@ -1,31 +1,27 @@
 <core-rules-dsl-reference id="mobile-qa/core-rules-dsl-reference.xml" name="Mobile QA Workflow · DSL Reference">
     <!--
-      v4.2 PR-7 / O23 / D-AGG-1：可编辑源 #2（DSL reference 子集）。
-      ── 收录 ──
-        · <supported-tags>            所有 DSL 标签 + <available-agents> 长表
-        · <input-protocol>            step-pause 输入协议（嵌套于 step-pause 标签内）
-      ── 不收录（→ core-rules-essential.xml）──
-        · <llm> / <agent-taxonomy> / <WORKFLOW-RULES>
-        · <workflow-result-protocol> / <human-review-protocol>
-      ── 聚合契约（D-AGG-1）──
-        · 本文件 body（去掉外层 <core-rules-dsl-reference> 根）会被
-          scripts/sync-core-rules-aggregate.py 注入到 core-rules-essential.xml 的
-          <!- - AGG-INSERT: core-rules-dsl-reference.xml - -> 占位处，
-          再聚合为 core/core-rules.xml（生成产物）。
-      ── 与 SubAgent 子集的关系（O25）──
-        · core-rules-subagent.xml 是本文件的极简裁剪（仅保留 SubAgent 在 invoke-subagent
-          黑盒透传时所必需的 step / check / load / action / template-output / phase-abort 等标签
-          及对应的 input-protocol / mandate）；DSL 长表（available-agents 等）不复制给 SubAgent。
+      本文件是 DSL Reference 源文件（会被聚合生成 core/core-rules.xml）。
+
+      收录：
+        - <supported-tags>：DSL 标签清单（含 <available-agents>）
+        - step-pause 的 <input-protocol>：输入/解析协议
+
+      不收录（由 core-rules-essential.xml 提供）：
+        - <llm> / <agent-taxonomy> / <WORKFLOW-RULES>
+        - <workflow-result-protocol> / <human-review-protocol>
+
+      聚合：
+        - 本文件 body（去掉外层根）会被 scripts/sync-core-rules-aggregate.py 注入到
+          core-rules-essential.xml 的占位处，再生成 core/core-rules.xml。
+
+      与 SubAgent 的关系：
+        - core-rules-subagent.xml 是 SubAgent 最小规则集；不复制本文件的长表。
     -->
     <supported-tags desc="Mobile QA Workflow 支持的标签">
         <!--
-          标签白名单边界声明（v4.1 / D3）：
-          本白名单仅约束 <flow>/<task> 内部 DSL 标签；元数据标签（<llm>/<mandate>/
-          <agent-taxonomy>/<human-review-protocol>/<trigger>/<output-format> 等）不在
-          LLM 解析校验范围内，PR-8 CI 也不对元数据标签做白名单守门。
-          协议级元标签（<input-protocol>/<workflow-result-protocol>）同样不在 DSL 白名单
-          管控范围内，由编排器与文档约定其语义；PR-8 CI 不做元素白名单校验
-          （v1.2 review Finding #3 收口）。
+          标签白名单边界声明：
+          - 白名单只约束 <flow>/<task> 内部 DSL 标签
+          - 元数据标签与协议级元标签不在 DSL 白名单范围内（由编排器/文档约定语义）
         -->
         <structural>
             <tag name="flow"><rule>定义工作流程的顶层容器</rule></tag>

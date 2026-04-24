@@ -21,18 +21,18 @@ last_updated: null
 active_branch: null
 stepsCompleted: []
 lastStep: null
-# ── group: retries（v4.2 PR-2 / O9 注释级归类，不动 schema） ──
+# ── group: retries（注释级归类，不动 schema） ──
 # 5 个计数器顶层字段语义同属"重试 / 熔断"组：
 #   · non_bug_reflow_count   — Non-Bug 跨轮回流次数（>= 2 → Human-Review）
 #   · lint_retry_count       — coder-agent <try retry="3"> 内部隐式管理
 #   · rca_retry_count        — RCA 升级 / 回流计数（> 2 → Human-Review）
 #   · fix_retry_count        — Fix 升级 / 回流计数（> 2 → Human-Review）
 #   · parse_error_count      — step-pause 连续解析失败熔断（>= 3 → Human-Review）
-# 写入端 / 重置规则各自独立（详见 V1.1 §2.1.4 / 各 phase 文件）；本注释仅做 reviewer 归类提示。
+# 写入端 / 重置规则各自独立（详见各 phase 文件）；本注释仅做归类提示。
 non_bug_reflow_count: 0
 lint_retry_count: 0
 workflow_version: "abc-1"
-schema_version: 4    # v4.1：3 → 4（v2.0 P0-3）
+schema_version: 4
 analysis_complexity: null
 analysis_complexity_confidence: null
 
@@ -42,8 +42,8 @@ selected_spec_index: null
 # fanout_mode 命名约束（D7）：保留为 RCA 字段，不重命名为 rca_fanout_mode；
 # Fix 阶段一律改写 fix_fanout_mode（C10 字段隔离）。
 fanout_mode: null
-fix_fanout_mode: null    # C10 + D7 + v4.2 PR-2 / O8：v4.1 新增，v4.2 PR-2 起为 P4 修复路由模式的唯一字段（合并废弃的 fix_strategy_mode）
-# 已废弃字段 rca_fanout_mode_snapshot / fix_strategy_mode 已删除（详见 ADR-007 v4.2 修订段）。
+fix_fanout_mode: null    # Fix 阶段路由模式字段（与 RCA 字段 fanout_mode 隔离）。
+# 已废弃字段 rca_fanout_mode_snapshot / fix_strategy_mode 已删除（见 ADR-007）。
 
 fix_risk_level: null
 reroute_reason: null
@@ -67,7 +67,7 @@ non_bug_context: null
 # parse-error 熔断计数器：进入新 step-pause / 解析成功 → 清零；解析失败 → +1；>= 3 → Human-Review 并清零。
 parse_error_count: 0
 
-# 顶层镜像字段已全部下线（v4.2 PR-6 / ADR-015）。
+# 顶层镜像字段已全部下线（见 ADR-015）。
 
 # ── 以下保留不动：specialized_workflow + [END_PRESERVE_FORMAT] ──
 specialized_workflow:

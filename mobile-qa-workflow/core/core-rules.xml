@@ -36,13 +36,9 @@
 
     <supported-tags desc="Mobile QA Workflow 支持的标签">
         <!--
-          标签白名单边界声明（v4.1 / D3）：
-          本白名单仅约束 <flow>/<task> 内部 DSL 标签；元数据标签（<llm>/<mandate>/
-          <agent-taxonomy>/<human-review-protocol>/<trigger>/<output-format> 等）不在
-          LLM 解析校验范围内，PR-8 CI 也不对元数据标签做白名单守门。
-          协议级元标签（<input-protocol>/<workflow-result-protocol>）同样不在 DSL 白名单
-          管控范围内，由编排器与文档约定其语义；PR-8 CI 不做元素白名单校验
-          （v1.2 review Finding #3 收口）。
+          标签白名单边界声明：
+          - 白名单只约束 <flow>/<task> 内部 DSL 标签
+          - 元数据标签与协议级元标签不在 DSL 白名单范围内（由编排器/文档约定语义）
         -->
         <structural>
             <tag name="flow"><rule>定义工作流程的顶层容器</rule></tag>

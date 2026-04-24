@@ -21,10 +21,8 @@
 ## 动态路由与状态恢复
 
 - `{variable}` 用于运行时变量注入；场景参数、维度参数、模式参数由调用处显式写入 `subagent_prompt`，不依赖 `agents/*.md` 内部模板渲染。
-- `workflow-status.yaml` 是动态路由唯一可信状态源；`analysis_complexity`、`fanout_mode`、`fix_fanout_mode`、`reroute_target_phase`、重试计数、`phase_history`、`user_inputs`、`non_bug_context`、`parse_error_count` 等字段由阶段文件写回，由主编排器读取并执行。
-- 恢复已有会话时必须优先识别 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`）；旧状态缺字段时，需要先补兼容默认值，再恢复阶段执行。
-- `current_phase_result` 是 phase 执行期的**运行时变量**（D1：仅在 phase 当次执行轮次内有效，**不会持久化**到 `workflow-status.yaml`）；phase 早退前显式 `current_phase_result = ABORT`，编排器在同一执行轮次读取后接管 step-pause 调度。
-- step-pause 用户回复统一写入 `workflow_status.user_inputs.<result_field>` 命名空间（v4.2 PR-6 起，详见 ADR-015 v4.2 修订段）；编排器 / phase / system-prompt 引用用户回复值时统一使用 `{user_inputs.<key>}` 形式。
+- `workflow-status.yaml` 是动态路由唯一可信状态源；字段定义与语义以 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml) 为权威。
+- 运行时恢复与 step-pause 写入协议以 [`SKILL.md`](./SKILL.md)「运行时恢复约束 / workflow_status 关键字段」为准。
 
 ## 主链路策略
 

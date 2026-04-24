@@ -1,10 +1,7 @@
 """
 Loupe AI 自检自测系统 — Artifact Checker (产物完整性校验)
-结合文件存在性 + 最小字数 + 关键段落存在性校验。
+结合文件存在性、最小字数、关键段落存在性与条件必需产物校验。
 内容质量判定由 LLM-as-Judge 负责，此处仅做轻量存在性校验。
-
-V1.2 增强: 新增 required_sections 关键段落存在性校验
-V3.1 增强: 新增 conditional 条件必需产物校验 + Schema 兼容层
 """
 
 import os
@@ -18,8 +15,6 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-
-# ─── V3.1: 元信息解析函数（单一数据源） ────────────────────────
 
 # 展示格式 → 程序化格式的唯一标准化映射
 FIELD_MAPPING: Dict[str, str] = {
@@ -73,8 +68,8 @@ class ArtifactChecker:
     根据 artifact-checklist.yaml 检查产物文件的：
     1. 存在性
     2. 最小字数
-    3. 关键段落存在性 (V1.2 新增)
-    4. 条件必需产物 (V3.1 新增)
+    3. 关键段落存在性
+    4. 条件必需产物
     """
 
     def __init__(self, checklist_path: str):
@@ -101,7 +96,7 @@ class ArtifactChecker:
         """
         result = CheckResult()
 
-        # V3.1: 预先解析 impl-report 元信息（供条件必需产物校验使用）
+        # 预先解析 impl-report 元信息，供条件必需产物校验使用
         metadata = self._load_impl_report_metadata(output_dir)
 
         # 1. 校验标准产物
@@ -112,7 +107,7 @@ class ArtifactChecker:
             required_type = item.get('required', True)  # 默认 True 保持兼容
 
             if required_type == 'conditional':
-                # V3.1 新增：条件必需产物
+                # 条件满足时按 required 处理
                 condition = item.get('condition', {})
                 condition_field = condition.get('field')
                 condition_value = condition.get('value')
@@ -167,7 +162,7 @@ class ArtifactChecker:
 
     @staticmethod
     def _load_impl_report_metadata(output_dir: str) -> Dict[str, Optional[str]]:
-        """V3.1: 加载 impl-report.md 元信息"""
+        """加载 impl-report.md 元信息。"""
         impl_report_path = os.path.join(output_dir, 'impl-report.md')
         if os.path.exists(impl_report_path):
             try:
@@ -182,7 +177,7 @@ class ArtifactChecker:
                         prefix: str = "",
                         is_optional: bool = False):
         """检查单个产物文件"""
-        # V3.1 Schema 兼容层：同时支持 path/file 和 min_size/min_size_bytes
+        # Schema 兼容层：同时支持 path/file 和 min_size/min_size_bytes
         rel_path = item.get("path") or item.get("file", "")
         full_path = os.path.join(output_dir, prefix, rel_path)
         min_size = item.get("min_size") or item.get("min_size_bytes", 0)
@@ -200,7 +195,7 @@ class ArtifactChecker:
                     "path": rel_path,
                     "phase": phase,
                 })
-                # V3.1: 记录 on_missing 动作
+                # 记录 on_missing 动作，便于区分 hard fail 与普通缺失
                 on_missing = item.get("on_missing", "fail")
                 if on_missing == "fail":
                     logger.warning(f"Missing required artifact: {full_path} (on_missing=fail)")
@@ -233,7 +228,7 @@ class ArtifactChecker:
                 f"({char_count} < {min_size})"
             )
 
-        # 3. 关键段落存在性 (V1.2 新增)
+        # 3. 关键段落存在性
         if sections:
             missing = self._check_required_sections(content, sections)
             if missing:
@@ -297,8 +292,9 @@ class ArtifactChecker:
 
         return missing
 
-    # TODO(tech-debt): 当前硬编码 workflow-status.yaml 路径和状态值判定，
-    #   若未来新增其他专项模式需重构为通用条件表达式引擎
+    # TODO(tech-debt): _check_expert_condition() 仍硬编码 workflow-status.yaml
+    # 与 specialized_workflow.status 的判定逻辑；若后续新增其他专项模式，
+    # 应将该条件下沉到 checklist 配置或统一条件求值层。
     def _check_expert_condition(self, output_dir: str,
                                 expert_config: dict) -> bool:
         """检查专家模式产物的触发条件"""

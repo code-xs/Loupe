@@ -1,14 +1,14 @@
 """
-Loupe AI 自检自测系统 V3 — Eval Framework
+Loupe AI 自检自测系统 — Eval Framework
 
 评估框架核心模块，提供完整的自检自测闭环能力：
 
 模块说明:
-    coordinator         - 核心协调器（V1 串行 / V2 并行）
+    coordinator         - 核心协调器（含串行与并行执行模式）
     session_manager     - IDE 会话生命周期管理 + IDEAdapter 适配层
     artifact_checker    - 产物完整性校验（含 required_sections）
     baseline_runner     - Chain D LLM 裸跑执行器
-    judge               - LLM-as-Judge 评分核心（6 维度盲评）
+    judge               - LLM-as-Judge 评分核心（9 维度盲评）
     scoring_engine      - 评分维度计算与加权统计
     comparator          - 横向链路对比器
     report_generator    - 多格式报告生成器
@@ -23,13 +23,16 @@ Chains:
     C - 外部 B2C 方案（人工录入）
     D - LLM 裸跑基线
 
-Scoring Dimensions (6):
+Scoring Dimensions (9):
     attribution_accuracy        (35%) - 归因准确率
     contributing_completeness   (15%) - 贡献因子完整性
     fix_correctness             (20%) - 修复方向正确性
     reasoning_depth             (10%) - 推理链深度
     artifact_completeness       (10%) - 产物完整性
     defensive_fix_quality       (10%) - 防御性修复质量
+    contract_first_pass_accuracy       - 合同首轮通过准确率
+    hallucination_interception         - 幻觉拦截率
+    self_healing_rate                  - 自愈率
 """
 
 __version__ = "3.0.0"

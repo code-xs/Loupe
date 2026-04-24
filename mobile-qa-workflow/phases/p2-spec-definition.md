@@ -50,16 +50,14 @@
                         将候选选项数组命名为 `{spec_options}`，并同时生成 `{option_1}` / `{option_2}` 两段文本（供弹窗选项标题占位使用）。
                         为避免把临时渲染字段写入 workflow_status 顶层 schema（Check 15 顶层字段断言），
                         本分支把三段值写入 workflow_status.user_inputs.* 命名空间（与 D15 单写协议一致）。</action>
-                <!-- v4.2 PR-6 / O13 / ADR-014 §7：D14 整改清零 — 删除内联 step-pause；
-                     由编排器 step 4c 命中 step-pause-registry.yaml `state: Spec-Uncertain` 项统一发起 step-pause。 -->
+                <!-- Spec-Uncertain 统一由编排器 step 4c 按 registry 发起 step-pause。 -->
                 <phase-abort state="Spec-Uncertain"
                              fields='{"user_inputs": {"spec_options": "{spec_options}", "option_1": "{option_1}", "option_2": "{option_2}"}}'
                              reason="ADR-014"/>
             </check>
             <action>逐项检查 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
 
-            <!-- Non-Bug 早退三步序列（v4.1 B2/D14/D17 / ADR-014）：
-                 1) 写 non_bug_context  2) 设 state=Non-Bug  3) ABORT 退出 phase；编排器 step 4 接管。 -->
+            <!-- Non-Bug 早退：写入 non_bug_context，切到 Non-Bug，并由编排器接管。 -->
             <check if="判定为 Non-Bug（命中 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate 之一）">
                 <action>生成 Non-Bug Resolution Report 文本，**将该段文本命名为 `{report_text}`**（供下方 phase-abort 宏 fields 字面引用），内容包含：
                         - 判定类别（5 选 1）
@@ -67,10 +65,7 @@
                         - 沟通建议（一段面向 reporter 的回复要点，便于 step-pause 用户决策）
                         - 改进建议（可选；如对应 UX 工单 / Feature Request / 文档改进）</action>
 
-                <!-- v4.2 PR-3' / O21 / ADR-014 / v1.2 review Finding #1 收口：
-                     `{report_text}` 是上一 <action> 显式命名的本轮局部变量（非 workflow_status 字段），
-                     宏展开第 2 步将其原文写入 workflow_status.non_bug_context，
-                     供 D17 协议下编排器 case Non-Bug 的 step-pause 标题占位 `{non_bug_context}` 使用 -->
+                <!-- `{report_text}` 为本轮局部变量，写入 workflow_status.non_bug_context 供后续 step-pause 引用。 -->
                 <phase-abort state="Non-Bug"
                              fields='{"non_bug_context": "{report_text}"}'
                              reason="ADR-014"/>
@@ -123,7 +118,7 @@
                 <action>执行单对话策展降级模式：主 Agent 自行完成 Curator 的 5 项能力。</action>
             </check>
 
-            <!-- curation_confidence 三分支显式化（v4.1 C5/B1* 兜底）：<0.4 → Curation-Failed + ABORT 早退。 -->
+            <!-- curation_confidence < 0.4 时转入 Curation-Failed 并早退。 -->
             <action>读取 curation_confidence</action>
             <switch condition="curation_confidence">
                 <case if=">= 0.7">
@@ -134,7 +129,7 @@
                             （部分置信度路径不早退；后续 step 9 仍输出三件套）</action>
                 </case>
                 <case if="< 0.4">
-                    <!-- v4.2 PR-3' / O21 / ADR-001：B1* 兜底，避免 stepsCompleted 错追加 -->
+                    <!-- 低置信度策展统一早退，由编排器按 ABORT 路径处理。 -->
                     <phase-abort state="Curation-Failed" reason="ADR-001"/>
                 </case>
             </switch>
@@ -150,7 +145,7 @@
             <template-output file="{output_spec}" template="mobile-qa-workflow/templates/spec.md"/>
             <template-output file="{output_context_bundle}" template="mobile-qa-workflow/templates/context-bundle.md"/>
 
-            <!-- v4.2 PR-3' / O21 / ADR-021 -->
+            <!-- 正常完成后注册产物路径并进入 RCA-Designing。 -->
             <phase-complete state="RCA-Designing"
                             update_config='{"output_curation_report": "{workspace_folder}/context-curation-report.md",
                                             "output_spec": "{output_spec}",

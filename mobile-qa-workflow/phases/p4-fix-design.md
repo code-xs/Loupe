@@ -135,12 +135,7 @@
                     四个维度的 1 句话总结），**将该段文本命名为本轮局部变量 `{fix_design_summary}`**（非
                     workflow_status 顶层字段；下方通过 `<phase-abort>` 的 `fields` 写入 `workflow_status.user_inputs.fix_design_summary`，
                     供 Fix-Confirming 弹窗标题占位 `{user_inputs.fix_design_summary}` 使用）</action>
-            <!-- v4.2 PR-6 / O14 / ADR-014 §7：D14 整改清零 — 删除内联 step-pause；
-                 改为 ABORT-with-confirm-gate 模式：phase-abort 退出 → 编排器 step 4c 命中
-                 step-pause-registry.yaml `state: Fix-Confirming` 项发起 step-pause；
-                 用户 Continue → set_state=Fix-Implementing；用户 Revise → set_state=Fix-Designing + fix_retry_count+1。
-                 Revise 路径不污染 stepsCompleted（v1.1 / Finding 2 收口）。
-                 update_config 与 phase-complete 同义（v1.1 / RULES-D4 新增）。 -->
+            <!-- Fix-Confirming 统一由编排器 step 4c 按 registry 发起 step-pause（Continue/Revise）。 -->
             <phase-abort state="Fix-Confirming"
                          fields='{"user_inputs": {"fix_design_summary": "{fix_design_summary}"}}'
                          update_config='{"output_fix_design": "{output_file}"}'

@@ -71,10 +71,7 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
                     <action>更新 {workflow_status}：current_state = Fix-Designing, reroute_reason = verification_design_insufficient, reroute_from_phase = qa-verification, reroute_target_phase = qa-fix-design, fix_retry_count += 1</action>
                 </case>
                 <case if="root_cause_not_closed">
-                    <!-- C5 收口：current_state 取值必须落在 core/workflow-status-template.yaml 头部注释列出的权威枚举集内；
-                         本 case 写入 RCA-Designing：语义为"将状态机回退到 RCA 设计阶段，由 P3 step 1 起重入"，
-                         与编排器 step 2/4 现有路由（按 reroute_target_phase = qa-root-cause）完全自洽，不引入新 case；
-                         v3 字面残留的非枚举集状态值已收口替换。 -->
+                    <!-- root_cause_not_closed：回退到 RCA-Designing，并强制升级到 complex-arbitrated。 -->
                     <action>更新 {workflow_status}：current_state = RCA-Designing, verification_failure_type = root_cause_not_closed, fanout_mode = complex-arbitrated, reroute_reason = verification_root_cause_not_closed, reroute_from_phase = qa-verification, reroute_target_phase = qa-root-cause, rca_retry_count += 1</action>
                 </case>
                 <case if="implementation_mismatch">
@@ -85,16 +82,11 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
                 </default>
             </switch>
 
-            <!-- C9：失败分支必先输出"中间态" verification-report 再回流；
-                 模板段落"中间态报告（失败回流时使用）"由 PR-6 在 templates/verification-report.md 提供，
-                 包含必填字段 failure_classification / evidence / repro_path。
-                 中间态/正态区分由模板内部按 verification_failure_type 是否为空切换段落（PR-6 落地），
-                 PR-4 调用方仅传现有 file/template 两个属性，不引入 mode 属性（避免与 core-rules.xml
-                 <template-output> 标签 DSL 漂移）。 -->
+            <!-- 失败分支：先输出 verification-report（中间态）再回流。 -->
             <template-output file="{output_verification}" template="mobile-qa-workflow/templates/verification-report.md"/>
             <action>更新 {config_source}：output_verification_report = {output_verification}</action>
 
-            <!-- v4.2 PR-3' / O21 / ADR-001 / state 占位字面 = 沿用上文 switch 已写入的 current_state（详见 ADR-021 §2 落地纪要） -->
+            <!-- state 占位：沿用上文 switch 已写入的 current_state。 -->
             <phase-abort state="{workflow_status}.current_state" reason="ADR-001"/>
         </check>
     </step>
@@ -114,7 +106,7 @@ description: Phase 6 — 验证与闭环，执行失败分类并按类型回流 
             <action>输出 Code Review Summary 文档，供人工创建 PR 时使用。</action>
         </check>
 
-        <!-- v4.2 PR-3' / O21 / ADR-021 + C5 收口 / Done 是工作流终态 -->
+        <!-- Done 为工作流终态。 -->
         <phase-complete state="Done"/>
     </step>
 </workflow>

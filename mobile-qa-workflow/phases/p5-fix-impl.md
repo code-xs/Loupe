@@ -108,7 +108,7 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
         <check if="{output_error_dump} 文件存在">
             <action>Execution-Status = Human-Review</action>
             <action>读取 error-dump.md，输出 Human-Review 通知</action>
-            <!-- v4.2 PR-3' / O21 / ADR-001 / goto step="8" 删除（宏第 4 步退出 phase 让 step 8 不可达） -->
+            <!-- error-dump 优先触发 Human-Review（phase-abort 直接退出，由编排器接管）。 -->
             <phase-abort state="Human-Review" reason="ADR-001"/>
         </check>
 
@@ -126,7 +126,6 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
             <check if="Repair-Route = code-fix 且 {output_contract_checklist} 不存在">
                 <action>Execution-Status = Incomplete</action>
                 <action>标记 [MISSING-REQUIRED-ARTIFACT: contract-checklist.md]</action>
-                <!-- v4.2 PR-3' / O21 / ADR-001 -->
                 <phase-abort state="Human-Review" reason="ADR-001"/>
             </check>
         </check>
@@ -134,7 +133,6 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
         <!-- 优先级 3：两个产物均不存在 -->
         <check if="{output_impl_report} 文件不存在 且 {output_error_dump} 不存在">
             <action>Execution-Status = Incomplete</action>
-            <!-- v4.2 PR-3' / O21 / ADR-001 -->
             <phase-abort state="Human-Review" reason="ADR-001"/>
         </check>
     </step>
@@ -148,12 +146,12 @@ description: Phase 5 — 修复实施，路由判定 + Coder SubAgent 调用 + �
             <action>保留 Coder Agent 已生成的 impl-report.md，禁止使用模板覆写实施结果</action>
         </check>
 
-        <!-- v4.2 PR-3' / O21 / 条件写入显式拆出宏外（宏 update_config 不支持按单 key 跳过 / v1.1 review Finding #3） -->
+        <!-- 条件写入：仅当产物存在时才写回 config_source。 -->
         <check if="{output_contract_checklist} 文件存在">
             <action>更新 {config_source}：output_contract_checklist = {output_contract_checklist}</action>
         </check>
 
-        <!-- v4.2 PR-3' / O21 / ADR-021 -->
+        <!-- 完成后注册 impl-report 路径并进入 Verifying。 -->
         <phase-complete state="Verifying"
                         update_config='{"output_impl_report": "{output_file}"}'/>
     </step>

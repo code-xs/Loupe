@@ -37,10 +37,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
     </step>
 
     <step n="4" goal="边界驱动路由与复杂度读取">
-        <!-- v4.2 PR-2 / O7 方案 B（READ-N1 / ADR-007 v4.2 修订段落）：
-             P3 重入读端补齐 — 删除 rca_fanout_mode_snapshot 后，从 phase_history 反查还原。
-             触发条件：fanout_mode 缺失或 null，且 phase_history 非空。
-             首次进入 P3（phase_history 为空）时本逻辑跳过，由下方 spec 推断路径正常工作。 -->
+        <!-- P3 重入时：fanout_mode 为空且 phase_history 非空，则从最近一次 qa-root-cause 记录反查还原。 -->
         <check if="{workflow_status}.fanout_mode == null 且 {workflow_status}.phase_history 非空">
             <action>从 {workflow_status}.phase_history 末尾反向遍历，找到第一条 phase == "qa-root-cause" 的元素，取其 fanout_mode 字段写回 {workflow_status}.fanout_mode；若反向遍历完仍未命中（极端 case：phase_history 不含 qa-root-cause 元素），则保持 fanout_mode = null，由下方 spec 推断路径接管。</action>
         </check>
@@ -57,7 +54,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <load target="mobile-qa-workflow/reference/platform-checklist.md" prompt="加载平台检查清单"/>
         <load target="mobile-qa-workflow/reference/analysis-strategies.md" prompt="加载动态 fan-out 策略知识库"/>
 
-        <!-- v4.2 PR-7 / O15 · 三档升级路径面收敛表（A 档 / 仅文档，宏体一字未改）：
+        <!-- 三档 fanout_mode 升级路径（读者视图，权威状态机见 workflow-status-template.yaml）：
              三档 fanout_mode 升级链路在 step 5 内统一通过 phase-abort 宏标签表达，
              宏体形如  state=NEXT_STATE  fields={fanout_mode: NEXT_FAN, reroute_reason: TRIGGER, ...}
              共写 5 个等价 fields 字段（fanout_mode / reroute_reason / reroute_from_phase /
@@ -77,13 +74,12 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
              · 升级是**单调**的：simple→medium→complex→Human-Review；不允许跳级或降级。
              · 本表与下方 3 处 phase-abort 宏的 fields 字段**逐字对齐**；任何 fields 修改必须先改本表。
              · 完整状态机定义详见 core/workflow-status-template.yaml；本表仅是 step 5 内升级路径的可读视图。
-             见：ADR-015（升级链）/ ADR-021（phase-abort 宏）/ §3.1 v1.1 PR-7 施工单。 -->
+             见：ADR-015（升级链）/ ADR-021（phase-abort 宏）。 -->
 
         <check if="fanout_mode == simple-single">
             <action>单视角执行 OVHSC 五步推理：OBSERVE -> HYPOTHESIZE -> VERIFY -> SCORE -> CHAIN。</action>
             <action>执行反事实校验；若发现更精确边界，则 current_state = Boundary-Refined。</action>
             <check if="反事实校验失败 或 最终置信度 < 0.70 或 出现新证据冲突">
-                <!-- v4.2 PR-3' / O21 / ADR-015 · O15 升级第 1 档：simple-single → medium-challenge（详见 step 5 顶部表） -->
                 <phase-abort state="RCA-Designing"
                              fields='{"fanout_mode": "medium-challenge",
                                       "reroute_reason": "simple_path_not_closed",
@@ -121,7 +117,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 <action>顺序模拟 Investigator + Challenger：使用 1 个主策略完成 OVHSC，再执行 `rca-5d` 质疑。</action>
             </check>
             <check if="challenger 出现 Critical 或 最终置信度 < 0.65">
-                <!-- v4.2 PR-3' / O21 / ADR-015 · O15 升级第 2 档：medium-challenge → complex-arbitrated（详见 step 5 顶部表） -->
                 <phase-abort state="RCA-Designing"
                              fields='{"fanout_mode": "complex-arbitrated",
                                       "reroute_reason": "medium_path_escalated",
@@ -171,8 +166,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 <action>顺序模拟 2 个 Investigator + Challenger + Arbiter。</action>
             </check>
             <check if="对抗轮次超过 3 轮仍未收敛">
-                <!-- v4.2 PR-3' / O21 / ADR-015 + ADR-014（Human-Review 协议触发）
-                     · O15 升级第 3 档：complex-arbitrated → Human-Review 熔断（详见 step 5 顶部表） -->
+                <!-- 多轮仍未收敛时熔断到 Human-Review。 -->
                 <phase-abort state="Human-Review"
                              fields='{"fanout_mode": "complex-arbitrated",
                                       "reroute_reason": "multi_view_non_convergent",
@@ -231,9 +225,7 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
 
         <check if="最终置信度 >= 0.5">
-            <!-- v4.2 PR-3' / O21 / ADR-021 + ADR-007 (v4.2 PR-2 修订)：
-                 phase_history.append 在 stop 路径之前执行，记录"P3 本次完成时 fanout_mode 的自然取值"；
-                 成功路径按 D1 默认 OK，编排器 step 4 追加 qa-root-cause 到 stepsCompleted。 -->
+            <!-- 成功路径：写入 phase_history，并进入 Fix-Designing。 -->
             <phase-complete state="Fix-Designing"
                             fields='{"reroute_reason": null,
                                      "reroute_target_phase": null}'
@@ -241,7 +233,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                             update_config='{"output_rca_report": "{output_file}"}'/>
         </check>
         <check if="最终置信度 < 0.5">
-            <!-- v4.2 PR-3' / O21 / ADR-001 + B1* 关键修复 -->
             <phase-abort state="RCA-LowConfidence"
                          fields='{"fanout_mode": "complex-arbitrated",
                                   "reroute_reason": "low_final_confidence",

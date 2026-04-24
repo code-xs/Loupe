@@ -209,29 +209,29 @@ class BaselineRunner:
             return self._generate_placeholder(prompt)
 
     def _generate_placeholder(self, prompt: str) -> str:
-        """生成占位符输出（用于测试环境）"""
+        """生成 fallback 输出（用于无 API 环境的测试）。"""
         return """### 1. 主要根因（Primary Root Cause）
-- 根因分类: [待分析]
-- 根因描述: [需要真实 LLM API 调用来生成分析结果]
+- 根因分类: [fallback]
+- 根因描述: [fallback output: configure ANTHROPIC_API_KEY for live analysis]
 - 代码位置: [未知]
 - 置信度: Low
 
 ### 2. 贡献因子（Contributing Factors）
-- [占位]: [需要真实分析]
+- [fallback]: [configure ANTHROPIC_API_KEY for live analysis]
 
 ### 3. 完整因果链
-[待分析] → [待分析] → [待分析]
+[fallback] → [fallback] → [fallback]
 
 ### 4. 推荐修复方案（Fix Recommendation）
-- 修复策略: [待分析]
-- 修复方案: [需要真实 LLM API 调用]
-- 修复理由: [待分析]
-- 变更范围: [待分析]
+- 修复策略: [fallback]
+- 修复方案: [fallback output: configure ANTHROPIC_API_KEY for live analysis]
+- 修复理由: [fallback]
+- 变更范围: [fallback]
 
 ### 5. 防御性建议
-- [待分析]
+- [fallback]
 
-> **注意**: 此为占位符输出，请配置 ANTHROPIC_API_KEY 环境变量以获取真实分析结果。
+> Note: fallback output (no live LLM call). Configure ANTHROPIC_API_KEY for real results.
 """
 
     @staticmethod

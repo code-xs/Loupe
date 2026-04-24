@@ -14,23 +14,23 @@ description: >-
 - platform：【选填】Android / iOS / Both
 
 ## 运行时恢复约束
-- 恢复已有问题时，先读取 `workflow-status.yaml` 中的 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`），缺失则按旧版状态补齐兼容默认值后再继续编排。
+- 恢复已有问题时，先读取 `workflow-status.yaml` 中的 `workflow_version` / `schema_version`；缺失时按工作流编排器的兼容逻辑补齐默认值后再继续编排。
 - `P3 / P4 / P6` 的动态路由状态统一写入 `workflow-status.yaml`，主编排器只读取结构化字段，不依赖阶段产物中的自由文本描述。
 - 子 Agent 参数通过调用处 `subagent_prompt` 显式拼接传递，不假设 `agents/*.md` 文件内部支持模板渲染。
 - `current_phase_result` 是 phase 执行期的**运行时变量**（不入 `workflow-status.yaml` 持久化字段表）；phase 早退前显式 `current_phase_result = ABORT`，编排器在同一执行轮次读取后接管 step-pause 调度。
 
-## workflow_status 关键字段（v4.1 / `schema_version: 4`）
+## workflow_status 关键字段
 
 > 完整权威源见 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml)。此处只保留“最小使用者说明”，避免与模板、system-prompt、PLATFORM-GUIDE 形成多处重复维护。
 
-| 字段 | 默认 | 用途 | 引入版本 |
-|---|---|---|---|
-| `schema_version` | `4` | v4.1 schema 升级；旧会话由迁移脚本补齐 | v4.1（v3 → v4） |
-| `fix_fanout_mode` | `null` | P4 修复路由模式（C10 字段隔离，承接 `single-proposer` / `challenged-proposer` / `contested-arbitrated`），与 RCA 字段 `fanout_mode` 物理隔离 | v4.1 / v4.2 PR-2 收敛 `fix_strategy_mode` |
-| `phase_history` | `[]` | 阶段执行历史（用于 P3 重入等恢复逻辑） | v4.1 |
-| `user_inputs` | `{}` | step-pause 用户回复命名空间 | v4.1 |
-| `non_bug_context` | `null` | Non-Bug 判定说明（供 step-pause 标题引用） | v4.1 |
-| `parse_error_count` | `0` | step-pause 解析失败熔断计数器 | v4.1 |
+| 字段 | 默认 | 用途 |
+|---|---|---|
+| `schema_version` | `4` | 状态 schema 版本；用于兼容恢复与解析策略 |
+| `fix_fanout_mode` | `null` | P4 修复路由模式；与 RCA 的 `fanout_mode` 隔离 |
+| `phase_history` | `[]` | 阶段执行历史（用于 P3 重入等恢复逻辑） |
+| `user_inputs` | `{}` | step-pause 用户回复命名空间 |
+| `non_bug_context` | `null` | Non-Bug 判定说明（供 step-pause 标题引用） |
+| `parse_error_count` | `0` | step-pause 解析失败熔断计数器 |
 
 > ❌ **不持久化 `current_phase_result`**（D1：运行时变量）。
 >

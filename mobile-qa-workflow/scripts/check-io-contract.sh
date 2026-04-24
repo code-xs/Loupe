@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# check-io-contract.sh (v1.1)
-# 守门：core/workflow.xml <io-contract> 中每个 <phase output="..."> 声明的 basename
-#       必须能在某个 phase 文件的 <template-output ... file="..."> 中被实际产出
-# 关联：V1.1 §3.2.22 第 3 项 / 主控 §4 PR-1 启用为 warning（PR-2 评估升级 error）
-# v1.1 算法：basename 匹配模型（兼容变量化路径如 file="{output_file}" / file="{workspace_folder}/spec.md"）
+# check-io-contract.sh
+# 校验 core/workflow.xml 的 <io-contract> 声明是否能被 phases/*.md 的 <template-output file="..."> 覆盖。
+# 失败条件：声明的 basename 未命中任何实际输出（且不存在变量化输出兜底时）。
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -44,7 +42,7 @@ ACTUAL=$(grep -hoE '<template-output[^/]*file="[^"]+"' phases/*.md system-prompt
 
 # ──────────────────────────────────────────────────────────
 # Step 3：对每个 DECLARED basename，要么在 ACTUAL 中直接命中，
-#         要么 ACTUAL 中存在变量化路径（{output_*}）—— PR-1 阶段允许变量化路径作为 wildcard 命中
+#         要么 ACTUAL 中存在变量化路径（{output_*}）作为 wildcard 命中
 # ──────────────────────────────────────────────────────────
 fail=0
 HAS_VARIABLE=$(echo "$ACTUAL" | grep -c '^{' || true)
@@ -61,15 +59,14 @@ for b in $DECLARED; do
 done
 
 # ════════════════════════════════════════════════════════════════════════════
-# === <step-pause> 互斥校验段（v4.2 PR-5 / CI-D1 / Patch B / id: step-pause-mutex）
+# === <step-pause> 互斥校验段（step-pause-mutex）
 # ════════════════════════════════════════════════════════════════════════════
 # 与 core-rules.xml <tag name="step-pause"><forms> 块字面同源，强制：
 #   ① form=registry：含 registry-key 且不含 title / result_field / allowed_values / option
 #   ② form=inline：  含 title + result_field + allowed_values 三必填且不含 registry-key
 #   ③ mutex 违规  ：同时含或同时缺 → error
 # 范围：core/workflow.xml + phases/p[1-6]-*.md
-# 豁免：v4.2 PR-6 起 D19 allowlist 已物理删除（FILE-D1），无任何豁免；
-#       mutex 段保留作为 inline 形态回潮兜底防线（与 SCRIPT-D6 single-form 强守门互补）。
+# mutex 段保留作为兜底防线，避免 step-pause 形态回潮导致解析/调度不可控。
 # 注释 mention 排除：与 D14/D16 同款，仅匹配 ^\s*<step-pause（行首属硬标签起始）。
 # ════════════════════════════════════════════════════════════════════════════
 mutex_check_file() {
@@ -121,11 +118,7 @@ while i < len(src_lines):
         i = j + 1
         continue
 
-    # 2) v4.2 PR-6 起 allowlist 豁免已下线（FILE-D1 物理删除 / SCRIPT-D1 v1.1 / Fix-3）
-    #    inline 形态零容忍由 SCRIPT-D6 (Check 17 / error) 单形态强守门承担；
-    #    本 mutex 段降为"两形态互斥"兜底防线，防 inline 形态意外回潮。
-
-    # 3) 形态判定
+    # 2) 形态判定
     has_reg   = bool(re.search(r'\bregistry-key\s*=', attrs))
     has_title = bool(re.search(r'\btitle\s*=', attrs))
     has_rf    = bool(re.search(r'\bresult_field\s*=', attrs))
@@ -159,6 +152,6 @@ if [ $mutex_fail -ne 0 ]; then
   fail=1
 fi
 
-# ── 总结输出（保持原 v1.1 行为）─────────────────────────────────────────────
-[ $fail -eq 0 ] && echo "✅ check-io-contract.sh (v1.1 + CI-D1 step-pause-mutex) 通过（DECLARED=$(echo "$DECLARED" | wc -w | tr -d ' ') / ACTUAL=$(echo "$ACTUAL" | wc -w | tr -d ' ') / SEVERITY=$SEVERITY / mutex 段：error 起步）"
+# ── 总结输出 ────────────────────────────────────────────────────────────────
+[ $fail -eq 0 ] && echo "✅ check-io-contract.sh 通过（DECLARED=$(echo "$DECLARED" | wc -w | tr -d ' ') / ACTUAL=$(echo "$ACTUAL" | wc -w | tr -d ' ') / SEVERITY=$SEVERITY / mutex=on）"
 exit $fail

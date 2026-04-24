@@ -25,7 +25,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <action>检查 Context Bundle 证据质量：至少 1 条 A 级证据，或 2 条 B 级证据；分类 Spec 扩展模块 >= 50% 关键字段已填充。</action>
         <check if="纯 C 级证据，阈值未通过">
             <action>列出需要补充的具体证据项</action>
-            <!-- v4.2 PR-3' / O21 / ADR-001 -->
             <phase-abort state="Spec-Defining" reason="ADR-001"/>
         </check>
     </step>
@@ -54,27 +53,8 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <load target="mobile-qa-workflow/reference/platform-checklist.md" prompt="加载平台检查清单"/>
         <load target="mobile-qa-workflow/reference/analysis-strategies.md" prompt="加载动态 fan-out 策略知识库"/>
 
-        <!-- 三档 fanout_mode 升级路径（读者视图，权威状态机见 workflow-status-template.yaml）：
-             三档 fanout_mode 升级链路在 step 5 内统一通过 phase-abort 宏标签表达，
-             宏体形如  state=NEXT_STATE  fields={fanout_mode: NEXT_FAN, reroute_reason: TRIGGER, ...}
-             共写 5 个等价 fields 字段（fanout_mode / reroute_reason / reroute_from_phase /
-             reroute_target_phase / rca_retry_count），由编排器统一消费 / 编辑差仅在前两个值。
-             ────────────────────────────────────────────────────────────────────────
-             | 当前 fanout_mode      | 触发条件                                | next state         | next fanout_mode      | reroute_reason                  |
-             |-----------------------|----------------------------------------|--------------------|-----------------------|---------------------------------|
-             | simple-single         | 反事实失败 / final<0.70 / 新冲突        | RCA-Designing      | medium-challenge      | simple_path_not_closed          |
-             | medium-challenge      | challenger Critical / final<0.65        | RCA-Designing      | complex-arbitrated    | medium_path_escalated           |
-             | complex-arbitrated    | 对抗轮次>3 仍未收敛                     | Human-Review       | complex-arbitrated    | multi_view_non_convergent       |
-             | (任意, step 10)        | 最终置信度 < 0.5                       | RCA-LowConfidence  | complex-arbitrated    | low_final_confidence            |
-             ────────────────────────────────────────────────────────────────────────
-             不变量（O15 守门）：
-             · 三档之间 reroute_target_phase == reroute_from_phase == "qa-root-cause"（自循环升级）；
-               complex→Human-Review 例外（reroute_target_phase 不参与，编排器走 human-review 协议）。
-             · rca_retry_count = "+1" 表示对 workflow_status.rca_retry_count 执行 +1 自增（编排器算）。
-             · 升级是**单调**的：simple→medium→complex→Human-Review；不允许跳级或降级。
-             · 本表与下方 3 处 phase-abort 宏的 fields 字段**逐字对齐**；任何 fields 修改必须先改本表。
-             · 完整状态机定义详见 core/workflow-status-template.yaml；本表仅是 step 5 内升级路径的可读视图。
-             见：ADR-015（升级链）/ ADR-021（phase-abort 宏）。 -->
+        <!-- fanout_mode 升级统一通过 phase-abort 写回 fanout_mode/reroute_*/rca_retry_count，
+             由编排器消费结构化字段完成重入路由。 -->
 
         <check if="fanout_mode == simple-single">
             <action>单视角执行 OVHSC 五步推理：OBSERVE -> HYPOTHESIZE -> VERIFY -> SCORE -> CHAIN。</action>
@@ -166,7 +146,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
                 <action>顺序模拟 2 个 Investigator + Challenger + Arbiter。</action>
             </check>
             <check if="对抗轮次超过 3 轮仍未收敛">
-                <!-- 多轮仍未收敛时熔断到 Human-Review。 -->
                 <phase-abort state="Human-Review"
                              fields='{"fanout_mode": "complex-arbitrated",
                                       "reroute_reason": "multi_view_non_convergent",
@@ -225,7 +204,6 @@ description: Phase 3 — 根因分析，通过动态 fan-out 与专项路由定�
         <template-output file="{output_file}" template="mobile-qa-workflow/templates/rca-report.md"/>
 
         <check if="最终置信度 >= 0.5">
-            <!-- 成功路径：写入 phase_history，并进入 Fix-Designing。 -->
             <phase-complete state="Fix-Designing"
                             fields='{"reroute_reason": null,
                                      "reroute_target_phase": null}'

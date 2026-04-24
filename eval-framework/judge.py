@@ -263,15 +263,15 @@ class LLMJudge:
                 "self_healing_rate": 5.0,
             },
             "reasoning": {
-                "attribution_accuracy": "[占位]",
-                "contributing_completeness": "[占位]",
-                "fix_correctness": "[占位]",
-                "reasoning_depth": "[占位]",
-                "artifact_completeness": "[占位]",
-                "defensive_fix_quality": "[占位]",
-                "contract_first_pass_accuracy": "[占位]",
-                "hallucination_interception": "[占位]",
-                "self_healing_rate": "[占位]",
+                "attribution_accuracy": "Fallback score used because live judge output is unavailable.",
+                "contributing_completeness": "Fallback score used because live judge output is unavailable.",
+                "fix_correctness": "Fallback score used because live judge output is unavailable.",
+                "reasoning_depth": "Fallback score used because live judge output is unavailable.",
+                "artifact_completeness": "Fallback score used because live judge output is unavailable.",
+                "defensive_fix_quality": "Fallback score used because live judge output is unavailable.",
+                "contract_first_pass_accuracy": "Fallback score used because live judge output is unavailable.",
+                "hallucination_interception": "Fallback score used because live judge output is unavailable.",
+                "self_healing_rate": "Fallback score used because live judge output is unavailable.",
             },
             "stage_scores": {
                 "F1_context_reconstruction": 5.0,
@@ -280,7 +280,7 @@ class LLMJudge:
                 "F4_isolation_debate": 5.0,
                 "F5_defensive_fix": 5.0,
             },
-            "overall_comment": "[占位 - 配置 ANTHROPIC_API_KEY 以获取真实评分]",
+            "overall_comment": "Fallback evaluation used. Configure ANTHROPIC_API_KEY and install anthropic for live scoring.",
         })
 
     def _parse_judge_response(self, raw: str) -> EvalResult:

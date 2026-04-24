@@ -47,7 +47,7 @@
 ## Limited 能力平台
 
 - Dify / Coze / OpenAI Assistants / LangGraph：使用 `system-prompt.md`
-- 至少持久化字段（v4.1 / `schema_version: 4`）：完整字段定义见 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml)，关键字段说明见 [`SKILL.md`](./SKILL.md)「workflow_status 关键字段」节
+- 至少持久化字段：完整字段定义见 [`core/workflow-status-template.yaml`](./core/workflow-status-template.yaml)，最小使用说明见 [`SKILL.md`](./SKILL.md)「workflow_status 关键字段」节
 - ❌ **不持久化 `current_phase_result`**（D1：运行时变量）
 
 ## Coder Agent 适配

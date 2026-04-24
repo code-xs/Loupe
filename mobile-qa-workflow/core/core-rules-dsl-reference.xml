@@ -18,11 +18,7 @@
         - core-rules-subagent.xml 是 SubAgent 最小规则集；不复制本文件的长表。
     -->
     <supported-tags desc="Mobile QA Workflow 支持的标签">
-        <!--
-          标签白名单边界声明：
-          - 白名单只约束 <flow>/<task> 内部 DSL 标签
-          - 元数据标签与协议级元标签不在 DSL 白名单范围内（由编排器/文档约定语义）
-        -->
+        <!-- 标签白名单仅约束 <flow>/<task> 内部 DSL 标签。 -->
         <structural>
             <tag name="flow"><rule>定义工作流程的顶层容器</rule></tag>
             <tag name="task"><rule>在 phase 文件内定义可调度的子任务容器，与 flow 同级</rule></tag>
@@ -106,16 +102,13 @@
                         phase 早退用 &lt;phase-abort state="..." fields="..." reason="..."/&gt; 宏，
                         phase 正常完成用 &lt;phase-complete state="..." .../&gt; 宏（详见 ADR-021）；
                         编排器 step 4c 命中 registry 项后按 ADR-010 §0 展开规则发起 step-pause。
-                        allowlist 例外清单已下线，CI 守门为"零容忍"（详见 ADR-019 superseded 状态）。
+                        例外清单已下线，CI 守门为零容忍。
                     </rule>
                     <rule>&lt;step-pause&gt; 必须命中且仅命中以下两种互斥形态之一
                           （由 scripts/check-io-contract.sh 互斥校验段强制 / 详见 ADR-016 v4.2 修订段）。</rule>
                 </rules>
                 <forms>
-                    <!-- inline 形态已退役（phase 内联 step-pause 已迁出）；
-                         registry 形态是唯一合法形态。inline 形态的字段定义保留在 ADR-016 主体作为
-                         "registry 项渲染时遵守的等价输出契约"——LLM 把 registry-key 展开为等价 inline
-                         形态后，按 input-protocol rule n=1 输出强结构。 -->
+                    <!-- inline 形态已退役；registry 形态是唯一合法形态。 -->
                     <form name="registry">
                         <required>registry-key</required>
                         <forbidden>title, result_field, allowed_values, option</forbidden>
@@ -128,8 +121,7 @@
                                                   scripts/check-step-pause-form.sh（Check 17 / error）强制；check-io-contract.sh 保留 mutex 兜底防线（warning）。</single-form>
                 </forms>
                 <params>
-                    <!-- inline 形态 (title/result_field/allowed_values/option) 已退役；
-                         等价输出契约定义见 ADR-016 主体 + input-protocol rule n=1。 -->
+                    <!-- inline 形态 (title/result_field/allowed_values/option) 已退役。 -->
                     <param name="registry-key" required="form:registry">
                         值通常为 "${current_state}"，由编排器 4c 在 LLM 展开前注入；
                         LLM 按 ADR-010 §0 展开规则查 core/step-pause-registry.yaml 渲染等价 inline 形态。
@@ -169,7 +161,7 @@
 
             <tag name="phase-abort">
                 <rules>
-                    <rule>Phase 早退的声明式宏标签（v4.2 / O21 / 详见 ADR-021）。</rule>
+                    <rule>Phase 早退的声明式宏标签（详见 ADR-021）。</rule>
                     <rule critical="true">展开等价于以下 5 个动作（LLM 必须按顺序逐个执行，不得跳过）：
                         1. <action>更新 {workflow_status}：current_state = {state}（state 以 `{` 开头时表示沿用上文已写值）</action>
                         2. <action>更新 {workflow_status}：{fields} 中的全部 key-value（"+1" 表示自增）</action>（仅当属性存在）
@@ -189,7 +181,7 @@
 
             <tag name="phase-complete">
                 <rules>
-                    <rule>Phase 正常完成的声明式宏标签（v4.2 / O21 / 详见 ADR-021）。</rule>
+                    <rule>Phase 正常完成的声明式宏标签（详见 ADR-021）。</rule>
                     <rule critical="true">展开等价于以下 5 个动作：
                         1. <action>更新 {workflow_status}：current_state = {state}</action>
                         2. <action>更新 {workflow_status}：{fields} 中的全部 key-value</action>（仅当属性存在）

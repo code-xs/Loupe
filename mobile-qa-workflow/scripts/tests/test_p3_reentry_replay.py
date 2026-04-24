@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""test_p3_reentry_replay.py — READ-N1 反查算法等价回放（v4.2 PR-2 / O7 方案 B）
+"""test_p3_reentry_replay.py — P3 重入 fanout_mode 反查算法等价回放
 
 不调用 LLM，仅用 python 实现 READ-N1 在 p3-root-cause.md step 4 的反查算法的等价副本，
 对 fixture 跑一次，断言能从 phase_history 末项 qa-root-cause 元素还原 fanout_mode。
-等价性约束：本脚本算法与 p3-root-cause.md step 4 的 LLM 描述必须保持文本对照可证，
-任何描述层改动必须同步更新本脚本（reviewer 议题 #R3）。
+等价性约束：本脚本算法与 p3-root-cause.md step 4 的描述保持一致；若调整描述或字段名，
+需同步更新本脚本与 fixtures。
 """
 import unittest
 from pathlib import Path

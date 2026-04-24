@@ -1,14 +1,12 @@
-# Mobile QA Workflow · step-pause 注册表（C5 单一权威源 / v4.2 PR-5 / O10+）
-# ⚠️ CRITICAL: 编排器 core/workflow.xml step 4a / 4c 查表的唯一数据源；
-# 编排器内严格禁止硬编码 <switch case="<交互态>">（CI check-step-pause-registry.sh
-# 第 ③ 类 error 兜底；详见 ADR-010 §2 + V1.1 §3.2.10+ 末尾）。
+# Mobile QA Workflow · step-pause 注册表（单一权威源）
+# ⚠️ CRITICAL: 编排器 core/workflow.xml step 4a / 4c 查表的唯一数据源；禁止在 workflow.xml 内硬编码交互态 case。
 #
-# Schema（v4.2 PR-5 v1.1 / Patch A，v4.2 PR-6 收口：mirror_to_top 已下线）：
+# Schema：
 #   state(必填，∈enum) / kind("step-pause"|"route"，默认 "step-pause")
-# kind == "step-pause"（v4.2 PR-6 起 7 个交互态：6 个 v4.1 + Fix-Confirming）：
+# kind == "step-pause"（交互态）：
 #   title_template / result_field / allowed_values / options[{title, action}]
 #   / on_success(map[str → action_block])
-#   （v4.2 PR-6 起 mirror_to_top 已下线，编排器 4a 全部走 user_inputs.<key> 单写）
+#   编排器写入统一使用 workflow_status.user_inputs.<key>（无顶层镜像字段）。
 # kind == "route"（1 个纯路由态 Boundary-Refined）：
 #   on_route(action_block) — 编排器 4c 命中时直接执行，不发起 step-pause、不等用户回复。
 # action_block 原子动作（详见 ADR-010 §0 展开规则）：
@@ -31,7 +29,7 @@ registry:
         set_state: Intake
         goto: step_2
 
-  - state: Spec-Uncertain   # PR-3' / O13a 已统一契约为 1|2|S 三选；v4.2 PR-6 PHASE-D1 删除 P2 内联 step-pause 后由 4c 唯一驱动
+  - state: Spec-Uncertain
     title_template: |
       Spec 存在歧义，请确认 Expected Behavior：
       {user_inputs.spec_options}
@@ -130,11 +128,7 @@ registry:
         interpret_freetext: true   # 编排器 4c 由 LLM 解释回复正文，更新 current_state / 计数器
         goto: step_2
 
-  # ── REG-N1（v4.2 PR-6 / O14 / ADR-014 §7 收口）─────────────────────────────
-  # Fix-Confirming 是 P4 step 6 写入的"待确认中间态"（phases/p4-fix-design.md PHASE-D2）：
-  # P4 已结束 Fix Design 但需用户 Continue/Revise 确认才进 P5。
-  # 走 ABORT-with-confirm-gate 模式：phase-abort 退出 → 编排器 4c 命中本项发起 step-pause。
-  # 不启用 mirror_to_top（v4.2 PR-6 起 mirror 双写已下线 / D15 单写）。
+  # Fix-Confirming：P4 输出 fix-design 后，等待用户 Continue/Revise 确认再进入 P5。
   - state: Fix-Confirming
     title_template: |
       Fix Design 四重论证完成，请确认是否进入修复实施：
@@ -156,11 +150,7 @@ registry:
         increment: fix_retry_count
         goto: step_2
 
-  # ── REG-N1.7（v1.1 / Patch A / review Finding 1 收口）─────────────────────────
-  # Boundary-Refined 是 P3 写入的"纯路由态"（phases/p3-root-cause.md L62），
-  # v4.1 编排器在 step 4 内显式 set_state = RCA-Designing 后回 step 2。
-  # v1.0 误归默认流转会让 current_state 留在 Boundary-Refined 导致 P3 自循环；
-  # v1.1 把它纳入 registry 作为 kind: route 项，与 6 个交互态共用同一权威源。
+  # Boundary-Refined：纯路由态，不触发 step-pause；直接回到 RCA-Designing 并回到 step 2。
   - state: Boundary-Refined
     kind: route
     on_route:

@@ -1,23 +1,17 @@
 <core-rules-essential id="mobile-qa/core-rules-essential.xml" name="Mobile QA Workflow · Essential Rules">
     <!--
-      v4.2 PR-7 / O23 / D-AGG-1：可编辑源 #1（essential 子集）。
-      ── 收录 ──
-        · <llm>                       LLM 行为强制约束
-        · <agent-taxonomy>            Agent 分层（业务 / 能力）
-        · <WORKFLOW-RULES>            阶段执行硬性约束
-        · <workflow-result-protocol>  current_phase_result 协议
-        · <human-review-protocol>     Human-Review 触发器集
-      ── 不收录（→ core-rules-dsl-reference.xml）──
-        · <supported-tags>            所有 DSL 标签 + <available-agents> 长表（含 step-pause input-protocol）
-      ── 聚合契约（D-AGG-1）──
-        · 唯一占位标记 <!- - AGG-INSERT: core-rules-dsl-reference.xml - -> 由
-          scripts/sync-core-rules-aggregate.py 替换为 dsl-reference 的 body，
-          并把外层 <core-rules-essential> 重命名为 <core-rules>，写到聚合产物
-          core/core-rules.xml（PR-7 起 core-rules.xml = 生成产物，禁止手改）。
-      ── 出口 ──
-        · phase 文件首步统一 <load core-rules-essential.xml>（v4.2 PR-7 起）；
-        · invoke-subagent 内 Full 平台改 <load core-rules-subagent.xml>（v4.2 PR-7 / O25）；
-        · build-system-prompt.py 仍读聚合产物 core-rules.xml（D-AGG-1 由脚本生成）。
+      本文件是 core-rules 的 source（essential 子集），会被聚合生成 core/core-rules.xml。
+
+      收录：
+        - <llm> / <agent-taxonomy> / <WORKFLOW-RULES>
+        - <workflow-result-protocol> / <human-review-protocol>
+
+      不收录（由 core-rules-dsl-reference.xml 提供）：
+        - <supported-tags>（含 <available-agents> 与 step-pause input-protocol）
+
+      聚合：
+        - <!-- AGG-INSERT: core-rules-dsl-reference.xml --> 位置会被注入 DSL reference body
+        - 产物 core/core-rules.xml 为生成文件，禁止手改（用 sync 脚本更新）
     -->
     <llm critical="true">
         <mandate>务必读取完整文件 - 读取任何与工作流相关的文件时，切勿使用偏移量/限制</mandate>
@@ -53,11 +47,11 @@
             （current_phase_result = OK），将本 phase 追加到 workflow_status.stepsCompleted。
         </rule>
         <rule>
-            phase 早退点位（v4.1 主链路）：
-              · phases/p2-spec-definition.md：Non-Bug 早退（PR-3） / Context-Curating / Curation-Failed
-              · phases/p3-root-cause.md：4 处早退点（PR-4，含 RCA-LowConfidence 等）
-              · phases/p6-verification.md：1 处失败回流早退点（PR-4）
-            上述 5+ 处必须在 PR-3/PR-4 内补齐 &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt; 标记。
+            phase 早退点位：
+              · phases/p2-spec-definition.md：Non-Bug / Curation-Failed 等早退
+              · phases/p3-root-cause.md：RCA-LowConfidence 等早退
+              · phases/p6-verification.md：失败回流早退
+            以上早退分支必须在返回编排器前显式设置 current_phase_result = ABORT。
         </rule>
         <rule>
             禁止把 current_phase_result 写入 core/workflow-status-template.yaml；

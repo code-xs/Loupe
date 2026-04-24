@@ -116,21 +116,20 @@
                     <rule>将 title 和 option 输出在纯文本回复中</rule>
                     <rule>输出后立即结束当前回复，未收到用户指令前禁止执行后续步骤</rule>
                     <rule critical="true" id="step-pause-scope">
-                        调度作用域约束（v4.1 / D14 / v4.2 PR-6 收口完成）：
+                        调度作用域约束：
                         &lt;step-pause&gt; 仅允许出现在 core/workflow.xml 编排器 step 4c 内
                         （按 current_state 命中 step-pause-registry.yaml 触发）；phase 文件
                         （phases/**、functionality-deep-dive/phases/**）**严禁**内联 &lt;step-pause&gt;。
                         phase 早退用 &lt;phase-abort state="..." fields="..." reason="..."/&gt; 宏，
                         phase 正常完成用 &lt;phase-complete state="..." .../&gt; 宏（详见 ADR-021）；
                         编排器 step 4c 命中 registry 项后按 ADR-010 §0 展开规则发起 step-pause。
-                        v4.2 PR-6 起 D19 allowlist 例外清单已下线（physical removal），
-                        CI 守门改为"零容忍"模式（详见 ADR-019 superseded 状态）。
+                        allowlist 例外清单已下线，CI 守门为"零容忍"（详见 ADR-019 superseded 状态）。
                     </rule>
-                    <rule>v4.2 PR-5 起 &lt;step-pause&gt; 必须命中且仅命中以下两种互斥形态之一
+                    <rule>&lt;step-pause&gt; 必须命中且仅命中以下两种互斥形态之一
                           （由 scripts/check-io-contract.sh 互斥校验段强制 / 详见 ADR-016 v4.2 修订段）。</rule>
                 </rules>
                 <forms>
-                    <!-- v4.2 PR-6 起 inline 形态已退役（phase 内联 step-pause 已 100% 迁出）；
+                    <!-- inline 形态已退役（phase 内联 step-pause 已迁出）；
                          registry 形态是唯一合法形态。inline 形态的字段定义保留在 ADR-016 主体作为
                          "registry 项渲染时遵守的等价输出契约"——LLM 把 registry-key 展开为等价 inline
                          形态后，按 input-protocol rule n=1 输出强结构。 -->
@@ -141,15 +140,15 @@
                                 把 registry-key 命中项的 title_template / result_field / allowed_values / options
                                 渲染为等价输出契约（即 ADR-016 主体定义的强结构 + input-protocol rule n=1 末尾行）。</expand>
                     </form>
-                    <single-form critical="true">v4.2 PR-6 起所有 &lt;step-pause&gt; 必须含 registry-key 且不含
+                    <single-form critical="true">所有 &lt;step-pause&gt; 必须含 registry-key 且不含
                                                   title / result_field / allowed_values / option；违规由
                                                   scripts/check-step-pause-form.sh（Check 17 / error）强制；check-io-contract.sh 保留 mutex 兜底防线（warning）。</single-form>
                 </forms>
                 <params>
-                    <!-- v4.2 PR-6 起 inline 形态 (title/result_field/allowed_values/option) 已全部退役；
+                    <!-- inline 形态 (title/result_field/allowed_values/option) 已退役；
                          等价输出契约定义见 ADR-016 主体 + input-protocol rule n=1。 -->
                     <param name="registry-key" required="form:registry">
-                        v4.2 PR-5 起新增。值通常为 "${current_state}"，由编排器 4c 在 LLM 展开前注入；
+                        值通常为 "${current_state}"，由编排器 4c 在 LLM 展开前注入；
                         LLM 按 ADR-010 §0 展开规则查 core/step-pause-registry.yaml 渲染等价 inline 形态。
                         禁止与 title / result_field / allowed_values / option 共存（mutex critical）。
                     </param>
@@ -174,10 +173,10 @@
                         （字段语义见 core/workflow-status-template.yaml 中 parse_error_count，决定 D18）。
                     </rule>
                     <rule n="5">
-                        编排器 4a 解析成功后**单写**用户回复（v4.2 PR-6 起，详见 ADR-015 v4.2 修订段）：
+                        编排器 4a 解析成功后**单写**用户回复（详见 ADR-015）：
                           workflow_status.user_inputs.&lt;key&gt; = &lt;value&gt;
                         编排器 / phase / system-prompt 引用用户回复值时，统一使用 {user_inputs.&lt;key&gt;} 形式。
-                        历史顶层镜像字段（v4.1 起步白名单 = { non_bug_user_choice }）已于 v4.2 PR-6 全量下线。
+                        历史顶层镜像字段已全量下线。
                     </rule>
                 </input-protocol>
             </tag>
@@ -191,7 +190,7 @@
                     <rule critical="true">展开等价于以下 5 个动作（LLM 必须按顺序逐个执行，不得跳过）：
                         1. <action>更新 {workflow_status}：current_state = {state}（state 以 `{` 开头时表示沿用上文已写值）</action>
                         2. <action>更新 {workflow_status}：{fields} 中的全部 key-value（"+1" 表示自增）</action>（仅当属性存在）
-                        3. <action>更新 {config_source}：{update_config} 中的全部 key-value</action>（仅当属性存在 / v4.2 PR-6 v1.1 新增，与 phase-complete 第 4 步同义）
+                        3. <action>更新 {config_source}：{update_config} 中的全部 key-value</action>（仅当属性存在；与 phase-complete 第 4 步同义）
                         4. <action>设置 current_phase_result = ABORT</action>
                         5. <action>退出本 phase（编排器 step 4 case 接管，按 current_state 路由）</action>
                     </rule>
@@ -200,7 +199,7 @@
                 <params>
                     <param name="state" required="true">目标 current_state（必须在权威枚举集内 / 或形如 `{workflow_status}.current_state` 的占位字面）</param>
                     <param name="fields" required="false">附加写回字段，JSON 字面量（支持 "+1" 自增）</param>
-                    <param name="update_config" required="false">config_source 批量注册项 JSON 字面量（v4.2 PR-6 v1.1 新增 / 与 phase-complete 同义；适用于"phase 已产出文件 + 同时需要等用户确认"的 ABORT-with-confirm-gate 场景，如 P4 step 6 Fix-Confirming）</param>
+                    <param name="update_config" required="false">config_source 批量注册项 JSON 字面量（与 phase-complete 同义；适用于"phase 已产出文件 + 同时需要等用户确认"的 ABORT-with-confirm-gate 场景）</param>
                     <param name="reason" required="false">触发原因引用（建议用 ADR-XXX 形式）</param>
                 </params>
             </tag>
@@ -236,11 +235,11 @@
             （current_phase_result = OK），将本 phase 追加到 workflow_status.stepsCompleted。
         </rule>
         <rule>
-            phase 早退点位（v4.1 主链路）：
-              · phases/p2-spec-definition.md：Non-Bug 早退（PR-3） / Context-Curating / Curation-Failed
-              · phases/p3-root-cause.md：4 处早退点（PR-4，含 RCA-LowConfidence 等）
-              · phases/p6-verification.md：1 处失败回流早退点（PR-4）
-            上述 5+ 处必须在 PR-3/PR-4 内补齐 &lt;action&gt;设置 current_phase_result = ABORT&lt;/action&gt; 标记。
+            phase 早退点位：
+              · phases/p2-spec-definition.md：Non-Bug / Curation-Failed 等早退
+              · phases/p3-root-cause.md：RCA-LowConfidence 等早退
+              · phases/p6-verification.md：失败回流早退
+            以上早退分支必须在返回编排器前显式设置 current_phase_result = ABORT。
         </rule>
         <rule>
             禁止把 current_phase_result 写入 core/workflow-status-template.yaml；

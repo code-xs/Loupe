@@ -9,7 +9,7 @@ priority: null
 output_issue_card: null
 output_spec: null
 output_context_bundle: null
-output_curation_report: null   # v4.1 新增 / C5 联动：Context-Curating 阶段产物路径
+output_curation_report: null
 output_rca_report: null
 output_fix_design: null
 output_impl_report: null
@@ -35,9 +35,7 @@ active_fix_strategy_policy: "risk-and-confidence"
 output_runtime_compat_report: null
 output_reroute_trace: null
 
-# v4.2 PR-7 / O16-A 已收敛：本块与 functionality-deep-dive/core/default-config.yaml
-# 同步使用 `deep_dive_optional_artifacts.*` 命名（旧 emit_* 已下线，schema/CI 守门）。
-# 三个二级键定版（K1）：environment_factor_report / deep_dive_topology / concurrency_analysis_report
+# Deep-Dive 默认产物开关（子工作流与主流程保持同名）。
 deep_dive_optional_artifacts:
   environment_factor_report: true
   deep_dive_topology: true

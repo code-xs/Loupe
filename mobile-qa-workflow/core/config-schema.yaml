@@ -1,13 +1,12 @@
-# Mobile QA Workflow — config_source 键名 schema（M16 最小子集 / v4.1 引入）
+# Mobile QA Workflow — config_source 键名 schema
 # ────────────────────────────────────────────────────────────────────────────
 # 唯一职责：枚举 phases 中所有 "更新 config_source.<key>" 动作允许使用的合法键名。
 # 消费方：
 #   · core/default-config.yaml          —— 实际默认值落地，本表是其字段子集的权威白名单
 #   · functionality-deep-dive/core/default-config.yaml —— deep-dive 子配置
-#                                                       （v4.2 PR-7 / O16-A 已收敛到统一键名）
 #   · phases/**/*.md                    —— 所有 "更新 config_source.<key>" 动作必须命中本表
-#   · .github/workflows/qa-workflow-schema-check.yml （PR-8 / D11）
-#   · mobile-qa-workflow/scripts/check-config-schema.sh （PR-8 / D13）
+#   · .github/workflows/qa-workflow-schema-check.yml
+#   · mobile-qa-workflow/scripts/check-config-schema.sh
 # ────────────────────────────────────────────────────────────────────────────
 # 命名约定：
 #   · output_*  : 阶段产物文件路径（落盘到 qa-workspace/{issue_id}/）
@@ -29,7 +28,7 @@ allowed_keys:
   - output_issue_card
   - output_spec
   - output_context_bundle
-  - output_curation_report   # v4.1 新增（PR-1 同步补齐 default-config.yaml，C5 关联）
+  - output_curation_report
   - output_rca_report
   - output_fix_design
   - output_impl_report
@@ -38,7 +37,7 @@ allowed_keys:
   - output_verification_report
   - output_knowledge_card
 
-  # ── Deep-Dive 产物（v4.2 PR-7 / O16-A：子配置键名已收敛，无键名漂移） ──
+  # ── Deep-Dive 产物 ──
   - output_environment_factor_report
   - output_topology_report
   - output_concurrency_report
@@ -75,4 +74,4 @@ nested_allowed_keys:
     - deep_dive_topology
     - concurrency_analysis_report
 
-# 已知遗留映射：v4.2 PR-7 / O16-A 已全部收敛，无残留别名。
+# 已知遗留映射：无。

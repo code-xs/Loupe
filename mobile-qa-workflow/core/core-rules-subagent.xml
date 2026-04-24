@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  SubAgent 专用轻量规则（v4.2 PR-7 / O25）
-  适用面：Full 平台 invoke-subagent 子对话；Limited 平台由 build-system-prompt.py 内嵌等价文本块。
-  收录：<subagent-context> + <subagent-output-protocol>（≈25 行规则）
-  不收录：<agent-taxonomy> / <WORKFLOW-RULES> / <supported-tags> / <human-review-protocol>（由父对话承担）
-  CI 守门：check-load-targets.sh (Check 18) 路径可达性。
+  SubAgent 专用轻量规则：
+  - Full 平台：invoke-subagent 子对话加载本文件
+  - Limited 平台：由 build-system-prompt.py 抽取等价文本块内嵌（L5）
+  仅收录：<subagent-context> + <subagent-output-protocol>
 -->
 <core-rules-subagent id="mobile-qa/core-rules-subagent.xml" name="Mobile QA Workflow · SubAgent Lightweight Rules">
 

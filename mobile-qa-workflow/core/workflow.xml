@@ -26,9 +26,7 @@
                     <load target="mobile-qa-workflow/core/workflow-status-template.yaml" prompt="内容作为模版，创建 {workflow_status} 文件"/>
                 </check>
                 <action>读取 {workflow_status} 文件，获取 stepsCompleted、current_state、workflow_version、schema_version、analysis_complexity、fanout_mode、fix_fanout_mode、reroute_target_phase、rca_retry_count、fix_retry_count、phase_history</action>
-                <!-- v4.2 PR-6 enum 集变更：current_state 新增 Fix-Confirming
-                     （位于 Fix-Designing 与 Fix-Implementing 之间，触发 P4 step 6 用户确认）；
-                     权威源 core/workflow-status-template.yaml 头部 v4.2 完整集合注释。 -->
+                <!-- current_state 枚举集以 core/workflow-status-template.yaml 头部注释为权威源。 -->
                 <check if="workflow_version 为空">
                     <action>将当前状态视为旧版状态文件，补充兼容默认值：workflow_version = legacy, schema_version = 1, fanout_mode = null, fix_fanout_mode = null, reroute_reason = null, reroute_target_phase = null, rca_retry_count = 0, fix_retry_count = 0</action>
                 </check>
@@ -101,14 +99,11 @@
                 </switch>
             </step>
 
-            <!-- ──────────────────────────────────────────────────────────────────
-                 Step 4a / 4b / 4c（v4.2 PR-5 / O10+ Stage-2）：
-                 把 v4.1 单 step 4 内 ~270 行 6-case switch 拆为三段职责正交：
-                   · 4a：仅在 step-pause 恢复时执行 — 解析用户回复 + 双写 + 熔断
-                   · 4b：阶段完成态判定 — 维护 stepsCompleted / lastStep / 重试熔断
-                   · 4c：状态路由查表 — 按 registry on_success 派发或落入流转态
-                 数据源：core/step-pause-registry.yaml（C5 单一权威源 / 禁止内联 case）
-                 详见 ADR-010 §0 展开规则 + V1.1 §3.2.10+ + check-step-pause-registry.sh ──────── -->
+            <!--
+                 Step 4a/4b/4c：编排器的“用户回复解析 / 阶段完成态维护 / 状态路由”三段职责。
+                 路由数据源：core/step-pause-registry.yaml（禁止在 workflow.xml 内硬编码交互态 case）。
+                 规则展开：见 ADR-010。
+            -->
 
             <step n="4a" goal="step-pause 用户回复解析 + 受限双写 + 熔断">
                 <load target="mobile-qa-workflow/core/step-pause-registry.yaml"/>
@@ -119,7 +114,7 @@
                             {value} 必须 ∈ allowed_values（不在判定解析失败）</action>
 
                     <check if="解析成功">
-                        <action>更新 {workflow_status}：user_inputs.{key} = {value}（v4.2 PR-6 起单写，无 mirror / D15 收口）</action>
+                        <action>更新 {workflow_status}：user_inputs.{key} = {value}（单写 user_inputs，无顶层镜像字段）</action>
                         <action>更新 {workflow_status}：parse_error_count = 0（D18 解析成功立即清零）</action>
                     </check>
 
@@ -154,9 +149,7 @@
                 </check>
             </step>
 
-            <step n="4c" goal="状态路由（registry 查表 / v1.1 修订：按 kind 派发）">
-                <!-- v4.2 PR-6 落地：Spec-Uncertain 字面已 100% 迁移到 step-pause-registry.yaml
-                     的 `state: Spec-Uncertain` 项；ANCHOR-N2 锚点已下线（详见 SCRIPT-D2 / SCRIPT-D4）。 -->
+            <step n="4c" goal="状态路由（registry 查表 / 按 kind 派发）">
                 <load target="mobile-qa-workflow/core/step-pause-registry.yaml"/>
 
                 <check if="{current_state} == Done">
@@ -164,7 +157,7 @@
                 </check>
 
                 <check if="{current_state} 命中 registry">
-                    <!-- v1.1 修订 / Patch A：先按 kind 派发；默认 step-pause，仅 Boundary-Refined 为 route。 -->
+                    <!-- 先按 kind 派发：默认 step-pause；Boundary-Refined 为 route。 -->
 
                     <!-- 分支 A：kind == "step-pause"（6 个交互态） -->
                     <check if="registry 项 kind == &quot;step-pause&quot;（默认）">
@@ -180,12 +173,12 @@
                             <action>按 registry 项 on_success.{user_inputs.&lt;result_field&gt;} 执行原子动作序列：
                                     set_state / write / increment / check（true/false 子块）/ goto / terminal / interpret_freetext
                                     （详见 ADR-010 §0 与 step-pause-registry.yaml schema 注释）</action>
-                            <action>派发完成后清空 user_inputs.{result_field}（消费一次性输入 / v4.2 PR-6 起 mirror 双写已下线）</action>
+                            <action>派发完成后清空 user_inputs.{result_field}（消费一次性输入）</action>
                             <action>按 on_success 中的 goto 跳转（terminal:true 时直接结束）</action>
                         </check>
                     </check>
 
-                    <!-- 分支 B（v1.1 / Patch A）：kind == "route"（纯路由态，仅 Boundary-Refined） -->
+                    <!-- 分支 B：kind == "route"（纯路由态，仅 Boundary-Refined） -->
                     <check if="registry 项 kind == &quot;route&quot;">
                         <action>不发起 step-pause、不等用户回复；直接按 registry 项 on_route 执行原子动作序列
                                 （set_state / write / increment / goto / terminal）；与 v4.1 编排器
@@ -194,7 +187,7 @@
                 </check>
 
                 <check if="{current_state} 未命中 registry 且非 Done（即纯流转态：Spec-Defining / Context-Curating / RCA-Designing / Fix-Designing / Fix-Implementing / Verifying / Intake）">
-                    <!-- v1.1 修订：Boundary-Refined 已上移到 registry kind: route 项，本默认分支不再覆盖它。 -->
+                    <!-- Boundary-Refined 由 registry kind: route 处理，本分支仅处理纯流转态。 -->
                     <goto step="2"/>
                 </check>
             </step>

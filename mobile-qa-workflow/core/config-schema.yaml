@@ -75,12 +75,4 @@ nested_allowed_keys:
     - deep_dive_topology
     - concurrency_analysis_report
 
-# 已知遗留映射（v4.2 PR-7 / O16-A 已收敛）
-# v4.2 遗留 #1（主→子键名漂移）已治理：子配置 functionality-deep-dive/core/default-config.yaml
-# 已统一为 deep_dive_optional_artifacts.* 命名；本字段保留为空 dict 占位，
-# 便于后续可能的兼容入口（不删字段以避免下游解析器假设其存在）。
-# 历史映射（仅作变更记录）：
-#   emit_environment_factor_report   →  deep_dive_optional_artifacts.environment_factor_report
-#   emit_topology_report             →  deep_dive_optional_artifacts.deep_dive_topology
-#   emit_concurrency_report          →  deep_dive_optional_artifacts.concurrency_analysis_report
-known_legacy_aliases: {}
+# 已知遗留映射：v4.2 PR-7 / O16-A 已全部收敛，无残留别名。

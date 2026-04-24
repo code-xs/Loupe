@@ -15,12 +15,20 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-from coordinator import Coordinator
-from judge import LLMJudge
-from scoring_engine import ScoringEngine
-from weakness_detector import WeaknessDetector, WeaknessReport
-from optimizer import Optimizer, ImprovementPlan, ImprovementResult
-from report_generator import ReportGenerator
+try:
+    from .coordinator import Coordinator
+    from .judge import LLMJudge
+    from .scoring_engine import ScoringEngine
+    from .weakness_detector import WeaknessDetector, WeaknessReport
+    from .optimizer import Optimizer, ImprovementPlan, ImprovementResult
+    from .report_generator import ReportGenerator
+except ImportError:
+    from coordinator import Coordinator
+    from judge import LLMJudge
+    from scoring_engine import ScoringEngine
+    from weakness_detector import WeaknessDetector, WeaknessReport
+    from optimizer import Optimizer, ImprovementPlan, ImprovementResult
+    from report_generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
 

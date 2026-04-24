@@ -8,6 +8,11 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from .metrics import DEFAULT_WEIGHTS
+except ImportError:
+    from metrics import DEFAULT_WEIGHTS
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,17 +67,7 @@ class ScoringEngine:
 
     def __init__(self, rubric_path: str = "eval-framework/scoring-rubric-base.yaml"):
         self.rubric = self._load_rubric(rubric_path)
-        self.weights = self.rubric.get("weights", {
-            "attribution_accuracy": 0.30,
-            "contributing_completeness": 0.12,
-            "fix_correctness": 0.18,
-            "reasoning_depth": 0.08,
-            "artifact_completeness": 0.09,
-            "defensive_fix_quality": 0.08,
-            "contract_first_pass_accuracy": 0.08,
-            "hallucination_interception": 0.04,
-            "self_healing_rate": 0.03,
-        })
+        self.weights = self.rubric.get("weights", DEFAULT_WEIGHTS)
         assert abs(sum(self.weights.values()) - 1.0) < 1e-6
 
     @staticmethod

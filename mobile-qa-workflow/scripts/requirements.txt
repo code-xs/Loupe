@@ -5,4 +5,4 @@
 # 安装方式：
 #   pip install -r mobile-qa-workflow/scripts/requirements.txt
 
-ruamel.yaml>=0.17    # migrate-workflow-status-v3-to-v4.py：保留注释/缩进的 YAML 读写
+# (无外部依赖 — ruamel.yaml 随迁移脚本删除已移除)

@@ -1,32 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  v4.2 PR-7 / O25 / §2.2 / §3.5 — SubAgent 专用轻量规则
-  ============================================================
-  适用面（仅 Full 平台 / `env_subagent=true`）：
-    · phases/{p3,p4,p5}.md 与 functionality-deep-dive/phases/{f1..f5}.md
-      的 invoke-subagent.subagent_prompt 内必须以
-      `<load target=".../core/core-rules-subagent.xml" .../>`
-      替代对完整 core-rules.xml 的 load。
-    · Limited 平台（`env_subagent=false`）由 build-system-prompt.py
-      在 system-prompt.md 内嵌等价文本块（见 §2.2 GEN-PR7 第 3 条）。
-      Limited 不复制本文件全文，亦不视作 O25 收益面。
-
-  与全量 core-rules.xml 的差集（D-AGG-1 输出）：
-    收录（≈ 25 行规则）：
-      · <subagent-context>      — 子对话隔离 / 输入约定 / 缺字段错误协议
-      · <subagent-output-protocol> — 输出形态 / 置信度量化 / 宏调用边界
-    不收录（由父对话承担，不应进入子 Agent token）：
-      · <agent-taxonomy>           — 编排层视角的 Agent 全集分类
-      · <WORKFLOW-RULES>           — 编排顺序 / phase 依赖 / state 机
-      · <supported-tags>           — 含 step-pause / phase-abort / phase-complete
-                                     宏的完整 schema、available-agents 表、
-                                     input-protocol 等
-      · <human-review-protocol>    — 7 个触发条件由父编排器统一观测
-
-  CI 守门：
-    · sync-core-rules-aggregate.py 不聚合本文件（独立维护）；本文件改动
-      不影响 core-rules.xml AUTOGEN 产物，但仍受 check-load-targets.sh
-      (Check 18 / GEN-PR7) 路径可达性守门。
+  SubAgent 专用轻量规则（v4.2 PR-7 / O25）
+  适用面：Full 平台 invoke-subagent 子对话；Limited 平台由 build-system-prompt.py 内嵌等价文本块。
+  收录：<subagent-context> + <subagent-output-protocol>（≈25 行规则）
+  不收录：<agent-taxonomy> / <WORKFLOW-RULES> / <supported-tags> / <human-review-protocol>（由父对话承担）
+  CI 守门：check-load-targets.sh (Check 18) 路径可达性。
 -->
 <core-rules-subagent id="mobile-qa/core-rules-subagent.xml" name="Mobile QA Workflow · SubAgent Lightweight Rules">
 

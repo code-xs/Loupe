@@ -11,6 +11,11 @@ from typing import Optional
 
 import yaml
 
+try:
+    from .metrics import DEFAULT_WEIGHTS, estimate_agent_count, collect_runtime_metrics
+except ImportError:
+    from metrics import DEFAULT_WEIGHTS, estimate_agent_count, collect_runtime_metrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -149,17 +154,7 @@ class LLMJudge:
         self.model = model
         self.rubric = self._load_rubric(rubric_path)
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        self.weights = self.rubric.get("weights", {
-            "attribution_accuracy": 0.30,
-            "contributing_completeness": 0.12,
-            "fix_correctness": 0.18,
-            "reasoning_depth": 0.08,
-            "artifact_completeness": 0.09,
-            "defensive_fix_quality": 0.08,
-            "contract_first_pass_accuracy": 0.08,
-            "hallucination_interception": 0.04,
-            "self_healing_rate": 0.03,
-        })
+        self.weights = self.rubric.get("weights", DEFAULT_WEIGHTS)
 
     @staticmethod
     def _load_rubric(path: str) -> dict:
@@ -333,60 +328,19 @@ class LLMJudge:
             "contributing_weight_override": "contributing_completeness",
             "fix_weight_override": "fix_correctness",
         }
-        default_weights = {
-            "attribution_accuracy": 0.30,
-            "contributing_completeness": 0.12,
-            "fix_correctness": 0.18,
-            "reasoning_depth": 0.08,
-            "artifact_completeness": 0.09,
-            "defensive_fix_quality": 0.08,
-            "contract_first_pass_accuracy": 0.08,
-            "hallucination_interception": 0.04,
-            "self_healing_rate": 0.03,
-        }
         custom = {dim: rubric[key] for key, dim in overrides.items() if rubric.get(key) is not None}
         if custom:
-            weights = {**default_weights, **custom}
+            weights = {**DEFAULT_WEIGHTS, **custom}
             result.weighted_score = round(sum(result.scores.get(dim, 0.0) * weight for dim, weight in weights.items()), 3)
         return result
 
     @staticmethod
     def _collect_runtime_metrics(output_dir: str) -> dict:
-        status_path = Path(output_dir) / "workflow-status.yaml"
-        if not status_path.exists():
-            return {}
-        try:
-            status = yaml.safe_load(status_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return {}
-        specialized = status.get("specialized_workflow", {}) or {}
-        return {
-            "analysis_complexity": status.get("analysis_complexity"),
-            "fanout_mode": status.get("fanout_mode"),
-            "fix_strategy_mode": status.get("fix_strategy_mode"),
-            "specialized_workflow_mode": specialized.get("mode"),
-            "specialized_workflow_status": specialized.get("status"),
-            "agent_count": LLMJudge._estimate_agent_count(status.get("fanout_mode"), status.get("fix_strategy_mode"), specialized.get("mode")),
-        }
+        return collect_runtime_metrics(output_dir)
 
     @staticmethod
     def _estimate_agent_count(fanout_mode: Optional[str], fix_strategy_mode: Optional[str], specialized_mode: Optional[str]) -> int:
-        mapping = {
-            "simple-single": 1,
-            "medium-challenge": 2,
-            "complex-arbitrated": 4,
-            "single-proposer": 1,
-            "challenged-proposer": 2,
-            "contested-arbitrated": 4,
-        }
-        total = 0
-        if fanout_mode:
-            total += mapping.get(fanout_mode, 0)
-        if fix_strategy_mode:
-            total += mapping.get(fix_strategy_mode, 0)
-        if specialized_mode == "functionality-deep-dive":
-            total += 4
-        return total
+        return estimate_agent_count(fanout_mode, fix_strategy_mode, specialized_mode)
 
     @staticmethod
     def load_case_data(case_dir: str) -> CaseData:

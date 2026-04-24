@@ -58,20 +58,8 @@
             </check>
             <action>逐项检查 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate</action>
 
-            <!-- ──────────────────────────────────────────────────────────────────
-                 v4.1 / B2 / B1* P2 / D14 / D17：Non-Bug 早退三步序列
-                 ──────────────────────────────────────────────────────────────────
-                 当 step 4 判定为 Non-Bug 时：
-                   1) 生成 Non-Bug 判定文本并写入 workflow_status.non_bug_context
-                      （供编排器 case Non-Bug 的 step-pause 标题占位 {non_bug_context} 使用）
-                   2) 设 current_state = Non-Bug
-                   3) 设运行时变量 current_phase_result = ABORT
-                 退出 phase（不再继续 step 5-9）；编排器 step 4 接管：
-                   - 不追加 qa-spec-definition 到 stepsCompleted（ABORT 分支）
-                   - 进入 case Non-Bug，由编排器统一发起确认 step-pause
-                 D14 合规：本 PR **不新增** <step-pause>；phase 内现存的 1 处
-                 Spec-Uncertain <step-pause> 作为 v4.2 遗留 #6 保持不动。
-                 ────────────────────────────────────────────────────────────────── -->
+            <!-- Non-Bug 早退三步序列（v4.1 B2/D14/D17 / ADR-014）：
+                 1) 写 non_bug_context  2) 设 state=Non-Bug  3) ABORT 退出 phase；编排器 step 4 接管。 -->
             <check if="判定为 Non-Bug（命中 Working-As-Designed / User-Misoperation / Environment-Specific / Known-Limitation / Duplicate 之一）">
                 <action>生成 Non-Bug Resolution Report 文本，**将该段文本命名为 `{report_text}`**（供下方 phase-abort 宏 fields 字面引用），内容包含：
                         - 判定类别（5 选 1）
@@ -135,14 +123,7 @@
                 <action>执行单对话策展降级模式：主 Agent 自行完成 Curator 的 5 项能力。</action>
             </check>
 
-            <!-- ──────────────────────────────────────────────────────────────────
-                 v4.1 / C5 / B1* 兜底：curation_confidence 三分支显式化
-                 ──────────────────────────────────────────────────────────────────
-                 v3 把三个分支折叠为一条自然语言 <action>，导致 "<0.4 → Curation-Failed"
-                 仅写状态而未触发早退（B1* 漏标 ABORT），编排器 step 4 会把
-                 qa-spec-definition 错误追加到 stepsCompleted，与 B1* 同源 bug。
-                 本变更点把三分支显式化，并在 Curation-Failed 分支补齐 ABORT 早退。
-                 ────────────────────────────────────────────────────────────────── -->
+            <!-- curation_confidence 三分支显式化（v4.1 C5/B1* 兜底）：<0.4 → Curation-Failed + ABORT 早退。 -->
             <action>读取 curation_confidence</action>
             <switch condition="curation_confidence">
                 <case if=">= 0.7">

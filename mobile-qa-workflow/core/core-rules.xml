@@ -102,11 +102,7 @@
                         <agent name="deep-dive-race-and-isolation-analyst" scenario="时序+隔离">竞态、时序窗口、隔离推演与候选排序</agent>
                         <agent name="deep-dive-arbiter" scenario="专项质疑+仲裁">先质疑后裁定，输出主根因与贡献因子</agent>
                         <agent name="defensive-fix-architect" scenario="防御性修复">状态机加固、竞态收敛和适度性修复设计</agent>
-                        <agent name="context-reconstructor" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
-                        <agent name="state-analyst" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
-                        <agent name="temporal-analyst" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用</agent>
-                        <agent name="challenger" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用 / 与同 agent-group main-workflow 中的 challenger 同名但隔离</agent>
-                        <agent name="arbiter" scenario="兼容旧会话">已退役（v3-legacy 会话恢复专用 / 物理文件已归档至 functionality-deep-dive/agents/archive/v3-legacy/ / 详见 ADR-019）；新会话禁用 / 与同 agent-group main-workflow 中的 arbiter 同名但隔离</agent>
+
                     </agent-group>
                 </available-agents>
             </tag>
@@ -154,26 +150,8 @@
                                                   scripts/check-step-pause-form.sh（Check 17 / error）强制；check-io-contract.sh 保留 mutex 兜底防线（warning）。</single-form>
                 </forms>
                 <params>
-                    <param name="title" required="false">
-                        v4.2 PR-6 起 inline 形态已退役（参见 ADR-016 v4.2 修订段 #2）。
-                        本字段定义保留作为"registry 项渲染时遵守的等价输出契约"参考：
-                        停顿标题最后一行必须追加 "请用 &lt;key&gt;=&lt;value&gt; 回复"，
-                        其中 &lt;key&gt; 必须与 result_field 同名，&lt;value&gt; 必须落在 allowed_values 内。
-                    </param>
-                    <param name="result_field" required="false">
-                        v4.2 PR-6 起 inline 形态已退役。本字段定义保留作为"registry 项渲染时遵守的等价输出契约"参考：
-                        本停顿点用户回复写入的字段名。编排器 4a 单写到 workflow_status.user_inputs.&lt;result_field&gt;
-                        （v4.2 PR-6 起 mirror 双写已下线）。
-                    </param>
-                    <param name="allowed_values" required="false">
-                        v4.2 PR-6 起 inline 形态已退役。本字段定义保留作为"registry 项渲染时遵守的等价输出契约"参考：
-                        合法回复值白名单（使用 "|" 分隔）。例如 "Accept|Reflow"。编排器解析失败时回显该白名单。
-                    </param>
-                    <param name="option" required="false" cardinality="0..*">
-                        v4.2 PR-6 起 inline 形态已退役。本字段定义保留作为"registry 项渲染时遵守的等价输出契约"参考：
-                        每个 &lt;option&gt; 标注一行可选回复语义，其 action 属性形式必须为
-                        "&lt;result_field&gt;=&lt;value&gt;" 且 &lt;value&gt; 必须命中 allowed_values 白名单。
-                    </param>
+                    <!-- v4.2 PR-6 起 inline 形态 (title/result_field/allowed_values/option) 已全部退役；
+                         等价输出契约定义见 ADR-016 主体 + input-protocol rule n=1。 -->
                     <param name="registry-key" required="form:registry">
                         v4.2 PR-5 起新增。值通常为 "${current_state}"，由编排器 4c 在 LLM 展开前注入；
                         LLM 按 ADR-010 §0 展开规则查 core/step-pause-registry.yaml 渲染等价 inline 形态。

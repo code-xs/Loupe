@@ -15,9 +15,16 @@ from typing import Optional
 
 import yaml
 
-from session_manager import IDESessionManager, SessionParams, SessionResult
-from artifact_checker import ArtifactChecker, CheckResult
-from baseline_runner import BaselineRunner
+try:
+    from .session_manager import IDESessionManager, SessionParams, SessionResult
+    from .artifact_checker import ArtifactChecker, CheckResult
+    from .baseline_runner import BaselineRunner
+    from .metrics import collect_runtime_metrics, estimate_agent_count
+except ImportError:
+    from session_manager import IDESessionManager, SessionParams, SessionResult
+    from artifact_checker import ArtifactChecker, CheckResult
+    from baseline_runner import BaselineRunner
+    from metrics import collect_runtime_metrics, estimate_agent_count
 
 logger = logging.getLogger(__name__)
 
@@ -234,9 +241,22 @@ class Coordinator:
             task.error_message = f"All {max_retries} retries exhausted, validation still failed"
         return result
 
+    def _resolve_profile(self, profile: str) -> dict:
+        prof = self.config.get("execution_profiles", {}).get(profile, {})
+        if "config_file" in prof:
+            resolved = dict(prof)
+            ext_config = self._load_config(prof["config_file"])
+            if isinstance(ext_config, dict):
+                top = ext_config.get(next(iter(ext_config)), ext_config) if len(ext_config) == 1 and isinstance(next(iter(ext_config.values())), dict) else ext_config
+                resolved.setdefault("cases", top.get("cases_dir") or top.get("cases"))
+                resolved.setdefault("chains", top.get("chains"))
+                resolved.setdefault("runs_per_case", top.get("runs_per_case"))
+            return resolved
+        return prof
+
     def run(self, cases_dir: str = None, chains: list[str] = None, profile: str = None) -> EvalRunSummary:
         if profile:
-            prof = self.config.get("execution_profiles", {}).get(profile, {})
+            prof = self._resolve_profile(profile)
             cases_dir = cases_dir or prof.get("cases", "eval-cases/")
             chains = chains or prof.get("chains", ["A", "B"])
         else:
@@ -329,46 +349,13 @@ class Coordinator:
         with open(summary_dir / "eval-summary.json", "w", encoding="utf-8") as f:
             json.dump(asdict(summary), f, indent=2, ensure_ascii=False)
 
-    def _collect_runtime_metrics(self, output_dir: str) -> dict:
-        status_path = Path(output_dir) / "workflow-status.yaml"
-        if not status_path.exists():
-            return {}
-        try:
-            status = yaml.safe_load(status_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return {}
-        specialized = status.get("specialized_workflow", {}) or {}
-        fanout_mode = status.get("fanout_mode")
-        fix_strategy_mode = status.get("fix_strategy_mode")
-        mode = specialized.get("mode")
-        agent_count = self._estimate_agent_count(fanout_mode, fix_strategy_mode, mode)
-        return {
-            "analysis_complexity": status.get("analysis_complexity"),
-            "fanout_mode": fanout_mode,
-            "fix_strategy_mode": fix_strategy_mode,
-            "specialized_workflow_mode": mode,
-            "specialized_workflow_status": specialized.get("status"),
-            "agent_count": agent_count,
-        }
+    @staticmethod
+    def _collect_runtime_metrics(output_dir: str) -> dict:
+        return collect_runtime_metrics(output_dir)
 
     @staticmethod
     def _estimate_agent_count(fanout_mode: Optional[str], fix_strategy_mode: Optional[str], specialized_mode: Optional[str]) -> int:
-        fanout_agents = {
-            "simple-single": 1,
-            "medium-challenge": 2,
-            "complex-arbitrated": 4,
-            "single-proposer": 1,
-            "challenged-proposer": 2,
-            "contested-arbitrated": 4,
-        }
-        total = 0
-        if fanout_mode:
-            total += fanout_agents.get(fanout_mode, 0)
-        if fix_strategy_mode:
-            total += fanout_agents.get(fix_strategy_mode, 0)
-        if specialized_mode == "functionality-deep-dive":
-            total += 4
-        return total
+        return estimate_agent_count(fanout_mode, fix_strategy_mode, specialized_mode)
 
     @staticmethod
     def _serialize_result(result: TaskResult) -> dict:

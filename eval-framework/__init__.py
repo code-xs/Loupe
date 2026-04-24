@@ -67,4 +67,6 @@ __all__ = [
     "IterationLoop", "IterationResult",
     # Quality Gate
     "QualityGate", "GateResult",
+    # Metrics (shared constants & utilities)
+    "DEFAULT_WEIGHTS", "estimate_agent_count", "collect_runtime_metrics",
 ]

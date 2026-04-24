@@ -217,96 +217,14 @@ Issue: {issue_id}
 
 # L2 · 当前阶段逻辑
 
-## qa-intake
+> 各阶段详细 step 定义见对应 phase 源文件（运行时由 `<load>` 加载）。
 
-来源：`phases/p1-intake.md`
-
-### Step 概览
-
-- step 1: 加载流程规范
-- step 2: 双场景信息获取（自动判定）
-- step 3: 问题分类
-- step 4: 问题边界判定与锚点盘点
-- step 5: 最小信息集门禁（含边界门禁）
-- step 6: 优先级评估
-- step 7: 输出 Issue Card
-
-## qa-spec-definition
-
-来源：`phases/p2-spec-definition.md`
-
-### Step 概览
-
-- step 1: 加载流程规范和上游产物
-- step 2: 填写 Spec 基础三要素
-- step 3: 加载分类扩展模块
-- step 4: Spec 校准与非 Bug 判定
-- step 5: 输出复杂度判定与建议 Fan-out
-- step 6: 候选证据搜集
-- step 7: 上下文策展
-- step 8: 二维证据分级与 Bundle 生成
-- step 9: 输出产物
-
-## qa-root-cause
-
-来源：`phases/p3-root-cause.md`
-
-### Step 概览
-
-- step 1: 加载流程规范和上游产物
-- step 2: 最小证据阈值检查
-- step 3: Context Bundle 降维裁剪（Token 超限时）
-- step 4: 边界驱动路由与复杂度读取
-- step 5: 执行 RCA 动态 Fan-out
-- step 6: 专项子工作流路由决策
-- step 7: 回注专项结论并合并 RCA
-- step 8: 客户端-服务端边界判定（功能类/网络类）
-- step 9: 跨平台 Sub-Issue 判定
-- step 10: 输出 Root Cause Report
-
-## qa-fix-design
-
-来源：`phases/p4-fix-design.md`
-
-### Step 概览
-
-- step 1: 加载流程规范和上游产物
-- step 2: 修复路径选择与策略分层
-- step 3: 执行动态 Proposal Fan-out
-- step 4: 方案确认与评估矩阵
-- step 5: 跨平台一致性评估与专项附录整合
-- step 6: 回归测试设计与输出
-
-## qa-fix-impl
-
-来源：`phases/p5-fix-impl.md`
-
-### Step 概览
-
-- step 1: 加载流程规范和上游产物
-- step 2: 专项修复附录加载（Functionality Deep-Dive 专项）
-- step 3: 工作区初始化
-- step 4: 修复路由判定 + 输出路径初始化
-- step 5: 调用 Coder SubAgent
-- step 6: SubAgent 结果接收与状态更新
-- step 7: 输出与状态流转
-- step 8: 失败路径收口
-
-## qa-verification
-
-来源：`phases/p6-verification.md`
-
-### Step 概览
-
-- step 1: 加载流程规范和上游产物
-- step 2: L1 — Spec 静态符合性验证 + 契约溯源交叉验证
-- step 3: L2 — 静态影响面 & 回归安全性验证
-- step 4: L3-Static — 静态发布质量验证
-- step 5: L3-Dynamic 标注（不阻塞闭环）
-- step 6: 验证判定与回流
-- step 7: 输出 Verification Report 与 Knowledge Card
-- step 8: PR/MR 生成
-
+- **qa-intake** — `phases/p1-intake.md`
+- **qa-spec-definition** — `phases/p2-spec-definition.md`
+- **qa-root-cause** — `phases/p3-root-cause.md`
+- **qa-fix-design** — `phases/p4-fix-design.md`
+- **qa-fix-impl** — `phases/p5-fix-impl.md`
+- **qa-verification** — `phases/p6-verification.md`
 
 # L3 · 推理工具箱（OVHSC 不可触动）
 
@@ -410,89 +328,25 @@ Issue: {issue_id}
 
 ---
 
+> 完整平台检查项见 `reference/platform-checklist.md`（运行时由 `<load>` 按需加载）。
+
 ## Android 平台检查清单
-
 ### 生命周期
-- [ ] 当前 Activity/Fragment 状态是否与操作预期一致？
-- [ ] 是否在 onDestroy 后仍持有引用？
-- [ ] 配置变更（屏幕旋转/语言切换）后状态是否正确恢复？
-- [ ] onSaveInstanceState/onRestoreInstanceState 是否正确处理？
-
 ### 线程模型
-- [ ] 异常操作是否发生在主线程？
-- [ ] 是否存在跨线程访问 UI 的情况？
-- [ ] Handler/Looper 状态是否正常？
-- [ ] 协程/RxJava 的线程调度是否正确？
-- [ ] 异步任务的取消和生命周期绑定是否正确？
-
 ### 内存
-- [ ] 是否存在 Context 泄漏链？（Activity → 匿名内部类/Handler/静态引用）
-- [ ] Bitmap 是否及时回收？是否使用了合适的采样率？
-- [ ] 是否触发 GC 导致卡顿？
-- [ ] 大对象是否使用了对象池？
-
 ### 进程
-- [ ] 多进程场景下 SharedPreferences 是否存在竞争？
-- [ ] ContentProvider 的跨进程访问是否线程安全？
-- [ ] 进程优先级是否导致被系统杀死？
-- [ ] 跨进程通信（Binder/AIDL）是否正确处理异常？
-
 ### 混淆
-- [ ] 堆栈是否需要 mapping.txt 还原？
-- [ ] 泛型擦除是否导致类型转换异常？
-- [ ] ProGuard/R8 规则是否覆盖了反射使用的类？
-- [ ] JSON 序列化/反序列化的字段是否被混淆？
-
 ### 存储
-- [ ] 文件访问是否符合 Scoped Storage 规范（Android 10+）？
-- [ ] 数据库操作是否在事务中执行？
-- [ ] SharedPreferences 的 apply/commit 选择是否合理？
-
 ### 权限
-- [ ] 运行时权限是否正确申请和处理拒绝场景？
-- [ ] targetSdkVersion 升级后权限行为是否有变化？
 
 ## iOS 平台检查清单
-
 ### 内存管理
-- [ ] ARC 下是否存在循环引用？（delegate/block/timer/NotificationCenter）
-- [ ] 是否在 dealloc 后访问了 self？
-- [ ] Closure 中是否正确使用 [weak self] 或 [unowned self]？
-- [ ] NSTimer/CADisplayLink 是否在 dealloc 时 invalidate？
-
 ### 线程
-- [ ] 是否在非主线程操作 UI？
-- [ ] GCD 队列是否存在死锁？（同步调用到当前队列）
-- [ ] @synchronized 范围是否合理？
-- [ ] DispatchQueue 的 QoS 是否合适？
-- [ ] 是否正确使用了 actor（Swift Concurrency）？
-
 ### RunLoop
-- [ ] 是否因 RunLoop Mode 切换导致 Timer 行为异常？（.default vs .common）
-- [ ] ScrollView 滚动时 Timer 是否暂停？
-- [ ] RunLoop Observer 的注册和移除是否正确？
-
 ### 系统 API
-- [ ] 是否使用了被 deprecated 的 API？
-- [ ] iOS 版本间行为差异是否被处理？（@available 检查）
-- [ ] 隐私相关 API 是否正确声明用途说明（Info.plist）？
-- [ ] App Transport Security 配置是否正确？
-
 ### 符号化
-- [ ] dSYM 是否与 build 版本匹配？
-- [ ] 系统库堆栈是否需要进一步符号化？
-- [ ] Bitcode 是否影响了符号化结果？
-
 ### 存储
-- [ ] UserDefaults 存储的数据量是否过大？
-- [ ] Core Data 操作是否在正确的 NSManagedObjectContext 线程？
-- [ ] Keychain 的 accessibility 级别是否合理？
-
 ### 界面
-- [ ] Safe Area 是否正确处理？
-- [ ] Status Bar 样式是否与页面内容匹配？
-- [ ] 横竖屏切换是否正确处理约束变化？
-- [ ] Dynamic Type 字号变化是否正确响应？
 
 
 # L5 · Limited 平台 SubAgent 等价内联块（v4.2 PR-7 / O25 / §2.2）

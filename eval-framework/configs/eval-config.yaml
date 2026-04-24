@@ -17,14 +17,10 @@ parallel_config:
 
 execution_profiles:
   pr_quick:
-    cases: "eval-cases/seed-10/"
-    chains: ["A", "B"]
-    runs_per_case: 1
+    config_file: "eval-framework/configs/pr-quick.yaml"
     description: "PR 快速评估：10 种子 Case × Chain A+B"
   nightly:
-    cases: "eval-cases/"
-    chains: ["A", "B", "D"]
-    runs_per_case: 1
+    config_file: "eval-framework/configs/nightly-full.yaml"
     description: "夜间全量评估：全部 Case × Chain A+B+D"
   weekly:
     cases: "eval-cases/"
@@ -32,9 +28,7 @@ execution_profiles:
     runs_per_case: 3
     description: "周评估：全部 Case × Chain A+B+D × 3 次取均值"
   monthly:
-    cases: "eval-cases/"
-    chains: ["A", "B", "C", "D"]
-    runs_per_case: 1
+    config_file: "eval-framework/configs/monthly-compare.yaml"
     description: "月度全链路评估：含 Chain C 外部 B2C 结果"
 
 chain_definitions:

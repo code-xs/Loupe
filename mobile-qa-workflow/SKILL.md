@@ -14,7 +14,7 @@ description: >-
 - platform：【选填】Android / iOS / Both
 
 ## 运行时恢复约束
-- 恢复已有问题时，先读取 `workflow-status.yaml` 中的 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`），缺失则运行 `mobile-qa-workflow/scripts/migrate-workflow-status-v3-to-v4.py` 或按旧版状态补齐兼容默认值后再继续编排。
+- 恢复已有问题时，先读取 `workflow-status.yaml` 中的 `workflow_version` / `schema_version`（v4.1 起 `schema_version = 4`），缺失则按旧版状态补齐兼容默认值后再继续编排。
 - `P3 / P4 / P6` 的动态路由状态统一写入 `workflow-status.yaml`，主编排器只读取结构化字段，不依赖阶段产物中的自由文本描述。
 - 子 Agent 参数通过调用处 `subagent_prompt` 显式拼接传递，不假设 `agents/*.md` 文件内部支持模板渲染。
 - `current_phase_result` 是 phase 执行期的**运行时变量**（不入 `workflow-status.yaml` 持久化字段表）；phase 早退前显式 `current_phase_result = ABORT`，编排器在同一执行轮次读取后接管 step-pause 调度。

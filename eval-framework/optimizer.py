@@ -298,7 +298,10 @@ class Optimizer:
     def _read_related_prompt(self, weakness) -> str:
         """读取与薄弱环节相关的 Prompt 文件"""
         # Stage → 文件映射
-        from weakness_detector import WeaknessDetector
+        try:
+            from .weakness_detector import WeaknessDetector
+        except ImportError:
+            from weakness_detector import WeaknessDetector
         stage_files = WeaknessDetector.STAGE_TO_FILE
 
         dim = weakness.dimension

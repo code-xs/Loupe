@@ -354,7 +354,7 @@ def _summarize_phase_file(text: str) -> str:
 def build_l2_phase_logic(
     workflow_root: Path = WORKFLOW_ROOT, phase: Optional[str] = None
 ) -> str:
-    """L2：默认全量 6 阶段；指定 phase 时仅输出该 phase + 前后 1 个相邻阶段。"""
+    """L2：默认全量 6 阶段概要；指定 phase 时输出该 phase + 前后相邻阶段的 step 详情。"""
     phases = _extract_phase_order(workflow_root)
     if phase is not None:
         if phase not in phases:
@@ -365,20 +365,28 @@ def build_l2_phase_logic(
         target_phases = phases
 
     parts = ["# L2 · 当前阶段逻辑\n"]
-    for p in target_phases:
-        rel = PHASE_FILE_MAP.get(p)
-        if rel is None:
-            continue
-        path = workflow_root / rel
-        if not path.is_file():
-            parts.append(f"## {p}\n\n(缺失 phase 文件: {rel})\n")
-            continue
-        body = _read(path)
-        parts.append(
-            f"## {p}\n\n来源：`{rel}`\n\n### Step 概览\n\n"
-            + _summarize_phase_file(body)
-            + "\n"
-        )
+    if phase is not None:
+        for p in target_phases:
+            rel = PHASE_FILE_MAP.get(p)
+            if rel is None:
+                continue
+            path = workflow_root / rel
+            if not path.is_file():
+                parts.append(f"## {p}\n\n(缺失 phase 文件: {rel})\n")
+                continue
+            body = _read(path)
+            parts.append(
+                f"## {p}\n\n来源：`{rel}`\n\n### Step 概览\n\n"
+                + _summarize_phase_file(body)
+                + "\n"
+            )
+    else:
+        parts.append("> 各阶段详细 step 定义见对应 phase 源文件（运行时由 `<load>` 加载）。\n")
+        for p in target_phases:
+            rel = PHASE_FILE_MAP.get(p)
+            if rel is None:
+                continue
+            parts.append(f"- **{p}** — `{rel}`")
     return "\n".join(parts)
 
 
@@ -486,7 +494,7 @@ PLATFORM_SECTION_MAP = {
 def build_l4_platform_knowledge(
     workflow_root: Path = WORKFLOW_ROOT, category: Optional[str] = None
 ) -> str:
-    """L4：按 category 提取段落；不指定 category 时输出 common + Android + iOS 全量。"""
+    """L4：按 category 提取段落；不指定 category 时输出通用规则全量 + 分平台分类概要。"""
     path = workflow_root / "reference" / "platform-checklist.md"
     if not path.is_file():
         return "# L4 · 平台知识\n\n(缺失 reference/platform-checklist.md)"
@@ -498,11 +506,20 @@ def build_l4_platform_knowledge(
         seg = _extract_section(text, start, end)
         parts.append(seg.rstrip() + "\n" if seg else f"(category={category} 段落未命中)\n")
     else:
-        for key in ("common", "android", "ios"):
+        # 通用规则全量保留（含防幻觉策略）
+        common_start, common_end = PLATFORM_SECTION_MAP["common"]
+        common_seg = _extract_section(text, common_start, common_end)
+        if common_seg:
+            parts.append(common_seg.rstrip() + "\n")
+        # Android / iOS 仅输出 ##/### 级标题概要
+        parts.append("> 完整平台检查项见 `reference/platform-checklist.md`（运行时由 `<load>` 按需加载）。\n")
+        for key in ("android", "ios"):
             start, end = PLATFORM_SECTION_MAP[key]
             seg = _extract_section(text, start, end)
             if seg:
-                parts.append(seg.rstrip() + "\n")
+                headers = [l for l in seg.splitlines()
+                           if l.strip().startswith("## ") or l.strip().startswith("### ")]
+                parts.append("\n".join(headers) + "\n")
     return "\n".join(parts)
 
 
